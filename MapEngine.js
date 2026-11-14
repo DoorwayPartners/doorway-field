@@ -182,11 +182,11 @@
     mode = DF.map.mode = DF.store.get('mapMode', DF.cfg.DEFAULT_MODE); label(mode);
     const rows = DF.sync.all().filter(visible), b = new maplibregl.LngLatBounds();
     rows.forEach(r => b.extend([r.lng, r.lat]));
-    // v2.4.2: north-up only (labels never upside down) · no tile fade animation + no re-fetch of expired tiles (battery + data)
-    map = new maplibregl.Map({ container, style: buildStyle(mode), attributionControl: false, dragRotate: false, pitchWithRotate: false, touchPitch: false, maxPitch: 0,
+    // v2.4.3: full two-finger rotate + tilt (the N compass snaps back to north-up) · no tile fade + no re-fetch of expired tiles (battery + data)
+    map = new maplibregl.Map({ container, style: buildStyle(mode), attributionControl: false, dragRotate: true, pitchWithRotate: true, touchPitch: true, maxPitch: 60,
       fadeDuration: 0, refreshExpiredTiles: false,
       center: rows.length ? b.getCenter() : [-98.5, 39.8], zoom: rows.length ? 13 : 3, maxZoom: 20 });
-    map.touchZoomRotate.disableRotation(); map.keyboard.disableRotation();
+    map.touchZoomRotate.enableRotation(); map.keyboard.enableRotation();
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
     map.on('style.load', addLayers);
     let tileErr = 0, tileOk = false;                                 // Google unreachable / blocked → Esri imagery, same modes

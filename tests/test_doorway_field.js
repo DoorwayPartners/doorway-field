@@ -104,9 +104,9 @@ const guardrails = () => require('./scan_secrets_csp.js').scan(ok);
       const s = await page.evaluate(() => { const st = DF.map.instance.getStyle(); return { tiles: st.sources.imagery ? st.sources.imagery.tiles[0] : '', leads: !!st.sources.leads, ring: !!DF.map.instance.getLayer('pin-stack') }; });
       ok(s.tiles.includes('google.com/vt/lyrs=' + { street: 'm', satellite: 's', hybrid: 'y' }[m] + '&') && s.leads && s.ring, 'Map Settings › ' + m + ' = Google lyrs=' + { street: 'm', satellite: 's', hybrid: 'y' }[m] + ' (pins + rings re-added)', s);
     }
-    const rot = await page.evaluate(async () => { const m = DF.map.instance, me0 = m.getSource('me')._data.features.length; m.setBearing(40); DF.$('#pill-compass').click(); await new Promise(r => setTimeout(r, 450));
-      return { drag: m.dragRotate.isEnabled(), touch: m.touchZoomRotate._rotationDisabled === true, pitch: m.getMaxPitch(), bearing: Math.round(m.getBearing()), me0 }; });
-    ok(!rot.drag && rot.touch && rot.pitch === 0 && rot.bearing === 0, 'north-up lock: no drag / two-finger rotation, no pitch; compass resets bearing to 0', rot);
+    const rot = await page.evaluate(async () => { const m = DF.map.instance, me0 = m.getSource('me')._data.features.length; m.jumpTo({ bearing: 40, pitch: 30 }); const tilted = Math.round(m.getPitch()); DF.$('#pill-compass').click(); await new Promise(r => setTimeout(r, 450));
+      return { drag: m.dragRotate.isEnabled(), touchRot: m.touchZoomRotate.isEnabled() && m.touchZoomRotate._rotationDisabled !== true, touchPitch: m.touchPitch.isEnabled(), maxPitch: m.getMaxPitch(), tilted, bearing: Math.round(m.getBearing()), pitch: Math.round(m.getPitch()), me0 }; });
+    ok(rot.drag && rot.touchRot && rot.touchPitch && rot.maxPitch === 60 && rot.tilted === 30 && rot.bearing === 0 && rot.pitch === 0, 'two-finger rotate + tilt enabled; N compass snaps back to bearing 0, pitch 0', rot);
     await page.evaluate(() => DF.map.jumpTo(DF.sync.all()[5].lead_id)); await page.click('#pill-gps'); await page.waitForFunction(() => DF.tools.following, null, { timeout: 8000 }); await page.waitForTimeout(700);
     const dot = await page.evaluate(() => { const m = DF.map.instance, f = m.getSource('me')._data.features, c = m.getCenter(); const pt = (f.find(x => x.geometry.type === 'Point') || { geometry: { coordinates: [0, 0] } }).geometry.coordinates;
       return { types: f.map(x => x.geometry.type).join(), dLat: Math.abs(c.lat - pt[1]), dLng: Math.abs(c.lng - pt[0]), acc: !!m.getLayer('me-acc'), fix: pt }; });

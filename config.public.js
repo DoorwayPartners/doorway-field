@@ -5,7 +5,7 @@ window.DF_CONFIG = (function () {
   const ENV_KEYS = ['API_URL', 'ORG_ID', 'BASEMAP', 'IMAGERY'], src = window.DF_ENV || {}, env = {};
   ENV_KEYS.forEach(k => { if (typeof src[k] === 'string') env[k] = src[k]; });   // whitelist: config.env.js can never inject a roster
   return Object.assign({
-  VERSION: '2.4.2',
+  VERSION: '2.4.3',
   ORG_ID: 'doorway',
   API_URL: '',                 // stays blank here: the live Sync URL lives in config.env.js. Admin › Sync Outbox can also set one per device
   FIXTURE_URL: '',             // tests/dev only

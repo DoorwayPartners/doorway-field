@@ -233,7 +233,7 @@
     DF.$$('.mode-card').forEach(c => c.addEventListener('click', () => { DF.map.setMode(c.dataset.mode); DF.closeModal('layers-drawer'); }));
     on('#pill-drop', () => showAdd(!dropArmed));   // bar explains itself: tap a house, or My GPS / Map centre
     on('#add-gps', () => addPin('gps')); on('#add-center', () => addPin('center')); on('#add-close', () => showAdd(false));
-    on('#pill-compass', () => DF.map.instance.easeTo({ bearing: 0, pitch: 0, duration: 300 }));
+    on('#pill-compass', () => DF.map.instance.easeTo({ bearing: 0, pitch: 0, duration: 300 }));   // N = back to north-up, flat
     on('#pill-gps', () => locateMe());
     on('#wheel-cancel', closeWheel);
     DF.bus.on('selection:changed', ids => { $('#sel-count').textContent = ids.length + ' selected'; });
