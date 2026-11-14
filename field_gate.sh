@@ -16,6 +16,7 @@ node tests/scan_secrets_csp.js || die "secret / CSP scan failed. Nothing was pub
 [ ! -d server ] || node tests/test_field_api.js || die "Field API (server) suite failed. Nothing was published."
 node tests/test_doorway_field.js || die "core golden suite failed. Nothing was published."
 node tests/test_field_v2.js || die "v2 golden suite failed. Nothing was published."
+node tests/test_field_v3.js || die "v2.4.4 field-velocity suite failed. Nothing was published."
 [ "$PUBLISH" = 1 ] || { echo "GATE PASS (dry run; nothing published)"; exit 0; }
 : "${FIELD_PAGES_REPO:?set FIELD_PAGES_REPO to your local clone of the isolated doorway-field Pages repo}"
 [ -d "$FIELD_PAGES_REPO/.git" ] || die "$FIELD_PAGES_REPO is not a git clone"

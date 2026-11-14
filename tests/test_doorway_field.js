@@ -57,8 +57,8 @@ const guardrails = () => require('./scan_secrets_csp.js').scan(ok);
     await page.click('#toast-action');
     ok(await page.evaluate(id => DF.sync.get(id).status_code, target.lead_id) === 'NEW', '5 s Undo restores the previous status');
     await page.click('#lead-menu [data-code="SOLD"]');
-    ok((await page.$$eval('#forms-fields span', s => s.map(x => x.textContent.replace(' *', '')))).join('|') === 'Customer Name|Speed Tier|Phone / Email|Install Date', 'SOLD opens the 4-field Forms (Customer Name, Speed Tier, Phone / Email, Install Date)');
-    await page.fill('#forms-fields input[name=phone_email]', '207-555-0199'); await page.fill('#forms-fields input[name=speed_tier]', 'Fiber 1 Gig'); await page.click('#forms-form button[type=submit]');
+    ok((await page.$$eval('#forms-fields span', s => s.map(x => x.textContent.replace(' *', '')))).join('|') === 'Customer Name|Phone|Speed Tier|Install Date', 'SOLD opens the 4-field Forms (Customer Name, Speed Tier, Phone / Email, Install Date)');
+    await page.fill('#forms-fields input[name=phone]', '207-555-0199'); await page.fill('#forms-fields input[name=speed_tier]', 'Fiber 1 Gig'); await page.click('#forms-form button[type=submit]');
     const sold = await page.evaluate(id => DF.sync.events(id).find(e => e.type === 'sold_form'), target.lead_id);
     ok(sold && sold.form.speed_tier === 'Fiber 1 Gig' && sold.form.customer_name && sold.campaign === 'Fidium', 'SOLD order saved to the event log with campaign', sold && sold.form);
     await page.click('#card-cb-btn'); await page.fill('#appt-input', '2026-11-20T18:30'); await page.click('#appt-form button[type=submit]');
@@ -168,12 +168,12 @@ const guardrails = () => require('./scan_secrets_csp.js').scan(ok);
     const r = await newPage(L.browser, L.base, { device: 'Pixel 7' });
     await r.page.waitForSelector('#modal-signin.open');
     const fresh = await r.page.evaluate(() => ({ opts: Array.from(DF.$$('#signin-name option')).map(o => o.value).join(), idRow: !DF.$('#signin-id-row').hidden }));
-    await r.page.fill('#signin-id', AGENT_A); await r.page.fill('#signin-pin', '0000'); await r.page.click('#signin-form button');
+    await r.page.selectOption('#signin-name', '__id'); await r.page.fill('#signin-id', AGENT_A); await r.page.fill('#signin-pin', '0000'); await r.page.click('#signin-form button');
     await r.page.waitForFunction(() => /Wrong Rep ID or PIN/.test(DF.$('#signin-err').textContent));
     await r.page.fill('#signin-pin', '1357'); await r.page.click('#signin-form button');
     await ready(r.page);
-    ok(fresh.opts === '__id' && fresh.idRow && await r.page.evaluate(() => DF.auth.id === 'agent-1' && !!(DF.store.get('session') || {}).token && !!DF.roster.get('agent-1').pin),
-      'fresh phone: no placeholder names to pick; Rep ID + PIN checked by the Sync API (wrong PIN refused) → session', fresh);
+    ok(fresh.opts === 'cristian-coy,__id' && !fresh.idRow && await r.page.evaluate(() => DF.auth.id === 'agent-1' && !!(DF.store.get('session') || {}).token && !!DF.roster.get('agent-1').pin),
+      'fresh phone: placeholder seats never offered (real roster names only); Rep ID + PIN checked by the Sync API (wrong PIN refused) → session', fresh);
     ok(!(await r.page.isVisible('#tab-admin')) && await r.page.evaluate(() => DF.auth.role === 'Agent'), 'server sign-in as Agent; Admin hidden');
     ok(await r.page.evaluate(async () => { DF.showTab('admin'); return DF.currentTab === 'map' && (await DF.imports.preview('address,lat,lng\n1 X,43,-70', 'x.csv')) === null; }), 'Agent cannot open Admin or import (UI gate; API re-checks)');
     const rid = await r.page.evaluate(() => DF.sync.all().find(x => DF.map.visible(x)).lead_id); await tap(r.page, rid, 'NH1');

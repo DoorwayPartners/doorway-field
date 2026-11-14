@@ -5,11 +5,11 @@ window.DF_CONFIG = (function () {
   const ENV_KEYS = ['API_URL', 'ORG_ID', 'BASEMAP', 'IMAGERY'], src = window.DF_ENV || {}, env = {};
   ENV_KEYS.forEach(k => { if (typeof src[k] === 'string') env[k] = src[k]; });   // whitelist: config.env.js can never inject a roster
   return Object.assign({
-  VERSION: '2.4.3',
+  VERSION: '2.4.4',
   ORG_ID: 'doorway',
   API_URL: '',                 // stays blank here: the live Sync URL lives in config.env.js. Admin › Sync Outbox can also set one per device
   FIXTURE_URL: '',             // tests/dev only
-  BASEMAP: 'google',           // 'google' (Hybrid / Street / Satellite) | 'esri' (Esri imagery + OpenFreeMap). Google auto-falls back to Esri
+  BASEMAP: 'google',           // Google Hybrid primary (rooftop clarity). Any tile failure / rate limit → Esri imagery + labels automatically (then OpenStreetMap)
   IMAGERY: 'esri',             // fallback imagery: 'esri' | 'usgs'
   DEFAULT_MODE: 'hybrid',
   FLUSH_EVERY_MS: 120000,      // batched background sync (also on screen-off / app-hide and the manual Sync button)
@@ -25,8 +25,8 @@ window.DF_CONFIG = (function () {
   ],
   SOLD_FIELDS: [
     { key: 'customer_name', label: 'Customer Name', type: 'text', required: true },
+    { key: 'phone', label: 'Phone', type: 'tel', required: true },
     { key: 'speed_tier', label: 'Speed Tier', type: 'text', required: true },
-    { key: 'phone_email', label: 'Phone / Email', type: 'text', required: true },
     { key: 'install_date', label: 'Install Date', type: 'date', required: false }
   ],
   ROUTE_MAX_STOPS: 23,
@@ -37,6 +37,9 @@ window.DF_CONFIG = (function () {
     googleAttr: 'Map data © Google',
     esri: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     esriAttr: 'Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+    esriRoads: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',
+    esriPlaces: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+    esriRefAttr: 'Labels © Esri, HERE, Garmin, OpenStreetMap contributors',
     usgs: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',
     usgsAttr: 'USDA, USGS The National Map: Orthoimagery',
     streetStyle: 'https://tiles.openfreemap.org/styles/liberty',

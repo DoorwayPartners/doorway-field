@@ -30,6 +30,8 @@
   <script src="AdminPanel.js" defer></script>
   <script src="PinStudio.js" defer></script>
   <script src="TurfZones.js" defer></script>
+  <script src="CardPlus.js" defer></script>
+  <script src="FollowUps.js" defer></script>
   <script src="Pwa.js" defer></script>
 </head>
 <body>
@@ -69,22 +71,24 @@
       <div class="grab"></div>
       <div class="card-head">
         <div><h2 id="card-name">Homeowner</h2><span id="card-status" class="status-chip">Prospects (New)</span></div>
-        <div class="card-head-actions"><button type="button" class="pill-outline" id="card-details">Details</button><button type="button" class="x" id="card-close" aria-label="Close">×</button></div>
+        <div class="card-head-actions"><a class="icon-btn" id="card-nav" target="_blank" rel="noopener" href="#" aria-label="Navigate with Google Maps">➤</a><a class="icon-btn call" id="card-call" hidden aria-label="Call">☎</a><a class="icon-btn call" id="card-text" hidden aria-label="Text">✉</a><button type="button" class="pill-outline" id="card-details">Details</button><button type="button" class="x" id="card-close" aria-label="Close">×</button></div>
       </div>
-      <p id="card-address" class="address"></p>
+      <div id="card-score" class="card-score" aria-label="Today's scoreboard: knocks, contacts, sold"><span><b id="sc-knocks">0</b> Knocks</span><span><b id="sc-contacts">0</b> Contacts</span><span><b id="sc-sold">0</b> Sold</span><button type="button" class="pill-outline small" id="sc-team">Me</button></div>
+      <p id="card-address" class="address" role="button" tabindex="0" title="Tap to copy"></p>
       <p id="card-meta" class="muted"></p>
       <p id="card-appt" class="appt"></p>
       <p id="card-intel" class="intel"></p>
       <p id="card-last" class="muted last"></p>
       <div id="lead-menu" class="lead-menu" role="toolbar" aria-label="Lead Menu"></div>
-      <div class="card-actions"><button type="button" class="btn" id="card-appt-btn">Appointment</button><button type="button" class="btn" id="card-cb-btn">Callback</button><button type="button" class="btn" id="card-forms-btn">Forms</button><a class="btn" id="card-dir" target="_blank" rel="noopener" href="#">Directions</a></div>
+      <div class="card-actions"><button type="button" class="btn" id="card-prev">← Prev</button><button type="button" class="btn primary" id="card-next">Next Door →</button><button type="button" class="btn" id="card-appt-btn">Appt</button><button type="button" class="btn" id="card-cb-btn">Callback</button></div>
       <form id="card-note-form" class="note-bar"><label for="card-note">NOTES</label><input id="card-note" maxlength="500" placeholder="Add a note..."><button class="btn" type="submit">Save</button></form>
     </article>
   </section>
 
   <section id="view-list" class="view" aria-label="List">
     <header class="viewhead"><h1>Leads</h1><p class="muted" id="list-count"></p></header>
-    <div class="filters"><input id="list-search" type="search" placeholder="Search"><button type="button" class="btn" id="list-cb">Callbacks / Appts</button><button type="button" class="btn" id="list-colbtn">Columns</button><button type="button" class="btn primary" id="list-export">Export CSV</button></div>
+    <div class="filters"><input id="list-search" type="search" placeholder="Search"><button type="button" class="btn" id="list-fu">Follow-Ups <b id="fu-count" class="badge-n"></b></button><button type="button" class="btn" id="list-cb">Callbacks / Appts</button><button type="button" class="btn" id="list-colbtn">Columns</button><button type="button" class="btn primary" id="list-export">Export CSV</button></div>
+    <div id="followups" class="followups" hidden></div>
     <div id="list-cols" class="colmenu"></div>
     <div id="list-bulk" class="bulk" hidden><span id="list-picked"></span><select id="bulk-status" aria-label="Bulk status"></select><button type="button" class="btn" id="bulk-status-go">Bulk Status</button>
       <span id="bulk-rep-wrap"><select id="bulk-rep" aria-label="Bulk reassign"></select><button type="button" class="btn" id="bulk-rep-go">Bulk Reassign</button></span><button type="button" class="btn danger" id="bulk-delete">Delete</button></div>
@@ -128,7 +132,7 @@
       <form id="roster-form" class="preview" hidden>
         <input id="rf-id" type="hidden"><label class="inline">Name <input id="rf-name" required maxlength="40"></label>
         <label class="inline">Role <select id="rf-role"><option>Owner</option><option>Manager</option><option selected>Agent</option></select></label>
-        <label class="inline">Team <input id="rf-team" maxlength="30"></label><label class="inline">Ring colour <input id="rf-color" type="color"></label>
+        <label class="inline">Team <input id="rf-team" maxlength="30"></label><label class="inline">Default campaign <select id="rf-default"></select></label><label class="inline">Ring colour <input id="rf-color" type="color"></label>
         <label class="inline">PIN (4–8 digits, "-" clears) <input id="rf-pin" inputmode="numeric" maxlength="8"></label>
         <div id="rf-camps" class="camp-list"></div>
         <div class="pv-actions"><button type="button" class="btn" id="rf-cancel">Cancel</button><button type="submit" class="btn primary">Save</button></div>
@@ -182,7 +186,7 @@
   <label><span>Date and time</span><input id="appt-input" type="datetime-local" required></label><button class="btn primary wide" type="submit">Save</button></form></div>
 
 <div id="modal-forms" class="modal" role="dialog" aria-label="SOLD order"><form id="forms-form" class="sheet"><div class="sheet-head"><h2>SOLD order</h2><button type="button" class="x" data-close="modal-forms" aria-label="Close">×</button></div>
-  <div id="forms-fields"></div><button class="btn primary wide" type="submit">Save SOLD</button></form></div>
+  <div id="forms-fields"></div><button type="button" class="btn wide" id="forms-groupme">Copy GroupMe Order</button><button class="btn primary wide" type="submit">Save SOLD</button></form></div>
 
 <div id="details" class="modal full" role="dialog" aria-label="Details"><div class="sheet">
   <div class="sheet-head"><h2 id="details-title">Details</h2><button type="button" class="x" data-close="details" aria-label="Close">×</button></div>

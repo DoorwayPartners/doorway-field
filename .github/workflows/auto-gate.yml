@@ -31,4 +31,4 @@ jobs:
       - name: Browser for golden tests
         run: npx playwright install --with-deps chromium
       - name: Golden fixture suites (core + v2)
-        run: node tests/test_doorway_field.js && node tests/test_field_v2.js
+        run: node tests/test_doorway_field.js && node tests/test_field_v2.js && node tests/test_field_v3.js

@@ -21,23 +21,26 @@
     // No @2x endpoint on Esri / USGS: on retina screens use 128 px tiles, so one zoom level deeper is fetched and drawn at 2x density
     return { type: 'raster', tiles: [usgs ? t.usgs : t.esri], tileSize: (window.devicePixelRatio || 1) >= 2 ? 128 : 256, maxzoom: usgs ? 16 : 19, attribution: usgs ? t.usgsAttr : t.esriAttr };
   }
-  const google = () => DF.cfg.BASEMAP === 'google' && !DF.map.fallback;
+  // Basemap chain (v2.4.4): DF.map.base = 'esri' (default) | 'google' | 'osm' (OpenFreeMap street vectors, OSM data). On tile failure → next.
+  const NEXT = { google: 'esri', esri: 'osm', osm: 'esri' }, NAMES = { google: 'Google', esri: 'Esri imagery', osm: 'OpenStreetMap street map' };
+  const APP_SRC = { leads: 1, lasso: 1, route: 1, me: 1, turfs: 1 };
+  const base = () => DF.map.base || (DF.map.base = ['google', 'esri', 'osm'].includes(DF.cfg.BASEMAP) ? DF.cfg.BASEMAP : 'esri');
   function buildStyle(m) {
-    const t = DF.cfg.TILES;
-    if (google()) {                                                  // Google Hybrid (labels, borders, shields) | Street | Satellite
+    const t = DF.cfg.TILES, b = base();
+    if (b === 'google') {                                                  // Google Hybrid (labels, borders, shields) | Street | Satellite
       const lyrs = { hybrid: 'y', street: 'm', satellite: 's' }[m] || 'y';
       return { version: 8, glyphs: t.glyphs, sources: { imagery: { type: 'raster', tiles: [0, 1, 2, 3].map(i => t.google.replace('{s}', i).replace('{lyrs}', lyrs)), tileSize: 256, maxzoom: 20,
         attribution: t.googleAttr } }, layers: [{ id: 'imagery', type: 'raster', source: 'imagery' }] };
     }
-    if (m === 'street') return t.streetStyle;
+    if (b === 'osm' || m === 'street') return t.streetStyle;
     const s = { version: 8, glyphs: t.glyphs, sources: { imagery: imagery() }, layers: [{ id: 'imagery', type: 'raster', source: 'imagery' }] };
     if (m !== 'hybrid') return s;
+    // Esri reference overlays (raster: roads + shields, boundaries + place names; no fonts needed) + OpenFreeMap house numbers from zoom 17
+    const ref = url => ({ type: 'raster', tiles: [url], tileSize: 256, maxzoom: 19, attribution: t.esriRefAttr });
     const halo = { 'text-color': '#ffffff', 'text-halo-color': 'rgba(0,0,0,0.8)', 'text-halo-width': 1.4 };
+    s.sources['ref-roads'] = ref(t.esriRoads); s.sources['ref-places'] = ref(t.esriPlaces);
     s.sources.omt = { type: 'vector', url: t.vector, attribution: t.vectorAttr };
-    s.layers.push(
-      { id: 'hy-roads', type: 'line', source: 'omt', 'source-layer': 'transportation', minzoom: 10, paint: { 'line-color': 'rgba(255,255,255,0.5)', 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 0.4, 16, 1.6, 19, 4] } },
-      { id: 'hy-road-names', type: 'symbol', source: 'omt', 'source-layer': 'transportation_name', minzoom: 13, layout: { 'symbol-placement': 'line', 'text-field': ['get', 'name'], 'text-font': [t.font], 'text-size': 12 }, paint: halo },
-      { id: 'hy-places', type: 'symbol', source: 'omt', 'source-layer': 'place', layout: { 'text-field': ['get', 'name'], 'text-font': [t.font], 'text-size': ['interpolate', ['linear'], ['zoom'], 8, 11, 14, 15] }, paint: halo },
+    s.layers.push({ id: 'ref-roads', type: 'raster', source: 'ref-roads' }, { id: 'ref-places', type: 'raster', source: 'ref-places' },
       { id: 'hy-housenumbers', type: 'symbol', source: 'omt', 'source-layer': 'housenumber', minzoom: 17, layout: { 'text-field': ['get', 'housenumber'], 'text-font': [t.font], 'text-size': 10 }, paint: halo });
     return s;
   }
@@ -189,9 +192,14 @@
     map.touchZoomRotate.enableRotation(); map.keyboard.enableRotation();
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
     map.on('style.load', addLayers);
-    let tileErr = 0, tileOk = false;                                 // Google unreachable / blocked → Esri imagery, same modes
-    map.on('sourcedata', e => { if (e.sourceId === 'imagery' && e.tile) tileOk = true; });
-    map.on('error', e => { if (e.sourceId !== 'imagery' || !google() || tileOk || ++tileErr < 3) return; DF.map.fallback = true; DF.toast('Google tiles unavailable: using Esri imagery'); setMode(mode); });
+    // Zero-blank-map: the primary basemap source must deliver a tile. 3 tile errors first, or nothing within 8 s (403 / 429 / blocked) → next basemap.
+    let tileErr = 0, ok = {}, swaps = 0, dog = null;
+    const primary = () => { const src = Object.keys(((map.getStyle && map.getStyle()) || {}).sources || {}).filter(id => !APP_SRC[id]); return src.includes('imagery') ? 'imagery' : src[0]; };
+    const swap = () => { if (swaps >= 2) return; swaps++; DF.map.base = NEXT[base()]; DF.map.fallback = true; DF.toast('Map tiles unavailable: switched to ' + NAMES[DF.map.base]); setMode(mode); };
+    const arm = () => { tileErr = 0; ok = {}; clearTimeout(dog); dog = setTimeout(() => { const p = primary(); if (p && !ok[p]) swap(); }, 8000); };
+    map.on('style.load', arm);
+    map.on('sourcedata', e => { if (e.sourceId && e.tile && !APP_SRC[e.sourceId]) ok[e.sourceId] = true; });
+    map.on('error', e => { const p = primary(); if (!e.sourceId || e.sourceId !== p || ok[p] || ++tileErr < 3) return; swap(); });
     map.on('dragstart', () => { DF.map.moved = true; });
     map.on('styleimagemissing', e => { if (/^cl-/.test(e.id)) map.addImage(e.id, clusterIcon(e.id), { pixelRatio: 2 }); else if (/^pin-/.test(e.id)) addPin(e.id); });
     map.once('load', () => {

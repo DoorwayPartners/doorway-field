@@ -80,6 +80,9 @@
     return true;
   }
   DF.setUser = setUser;
+  // default campaign at sign-in: Owner / Manager → All Campaigns; reps → their defaultCampaign (else the first assigned one)
+  DF.defaultCampaign = r => !r || r.role !== 'Agent' ? '*' : (r.defaultCampaign && (r.campaigns || []).concat(['*']).some(c => c === r.defaultCampaign || c === '*') ? r.defaultCampaign
+    : (r.campaigns || []).find(c => c !== '*') || DF.cfg.DEFAULT_CAMPAIGN);
   DF.signOut = () => { DF.store.set('user', null); DF.store.set('session', null); location.reload(); };
   // ---- invite links (Admin › Roster › Copy Invite Link) = ?token=<128-bit random>. No role, name or id in the URL. The phone hashes the token
   // (SHA-256) and resolves it against the authorized roster: this device's roster first, then the private Sync endpoint (action redeem_invite).
@@ -137,15 +140,16 @@
       const saved = DF.store.get('user', null);
       if (!inv && !DF.inviteMsg && saved && saved.id && setUser(saved.id)) return resolve();      // cached session on this phone
       const sel = DF.$('#signin-name'), online = !!DF.sync.syncUrl(), err = m => { DF.$('#signin-err').textContent = m; };
-      const listed = DF.roster.all().filter(r => r.pin || (inv && r.id === inv.id));
-      sel.innerHTML = listed.map(r => '<option value="' + DF.esc(r.id) + '">' + DF.esc(r.name) + '</option>').join('') + (online ? '<option value="__id">Other rep: enter Rep ID</option>' : '');
+      const generic = r => /^(Manager|Agent) \d+$/.test(r.name) && !r.pin;                 // public placeholder seats are never offered
+      const listed = DF.roster.all().filter(r => (inv && r.id === inv.id) || r.pin || (online && !generic(r)));   // tap your name + PIN
+      sel.innerHTML = listed.sort((a, b) => a.name.localeCompare(b.name)).map(r => '<option value="' + DF.esc(r.id) + '">' + DF.esc(r.name) + '</option>').join('') + (online ? '<option value="__id">Other rep: enter Rep ID</option>' : '');
       if (inv) { sel.value = inv.id; DF.$('#signin-title').textContent = 'Welcome, ' + inv.name.split(' ')[0]; }
       err(DF.inviteMsg || (!listed.length && !online ? 'This phone is not set up yet: open your invite link.' : ''));
       const showPin = () => { const other = sel.value === '__id', r = other ? null : DF.roster.get(sel.value);
-        DF.$('#signin-id-row').hidden = !other; DF.$('#signin-pin-row').hidden = !(other || r); DF.$('#signin-pin-label').textContent = r && !r.pin ? 'Set your PIN (4-8 digits)' : 'PIN'; };
+        DF.$('#signin-id-row').hidden = !other; DF.$('#signin-pin-row').hidden = !(other || r); DF.$('#signin-pin-label').textContent = r && !r.pin && inv && r.id === inv.id ? 'Set your PIN (4-8 digits)' : 'PIN'; };
       sel.onchange = showPin; showPin();
       DF.openModal('modal-signin');
-      const done = (id, after) => { DF.closeModal('modal-signin'); setUser(id); if (after) after(); resolve(); };
+      const done = (id, after) => { DF.closeModal('modal-signin'); setUser(id); DF.setCampaign(DF.defaultCampaign(DF.roster.get(id))); if (after) after(); resolve(); };
       DF.$('#signin-form').onsubmit = async e => {
         e.preventDefault();
         const pin = DF.$('#signin-pin').value.trim();
@@ -160,6 +164,12 @@
         if (r.pin) {
           if (DF.hash(r.id + ':' + pin) !== r.pin) return err('Wrong PIN');
           return done(r.id, () => { if (online && !session()) serverLogin(r.id, pin); });   // get a sync session in the background
+        }
+        if (!(inv && r.id === inv.id)) {                                        // name from the roster, PIN not on this phone: the Sync API checks it
+          if (!/^\d{4,8}$/.test(pin)) return err('Enter your 4-8 digit PIN');
+          const res = await serverLogin(r.id, pin);
+          if (!res.ok) return err(res.error === 'locked' ? 'Too many tries: wait 15 minutes' : res.error === 'offline' ? 'No connection: try again' : 'Wrong PIN');
+          return done(res.rep.id);
         }
         if (!/^\d{4,8}$/.test(pin)) return err('Set a 4-8 digit PIN');                       // invited rep without a PIN: one is required now
         const ph = DF.hash(r.id + ':' + pin);
@@ -192,7 +202,7 @@
       catch (e) { console.error('[DF] fixture', e); }
     }
     await signIn(await takeInvite());
-    ['card', 'filters', 'list', 'stats', 'lasso', 'imports', 'admin', 'pins', 'turf', 'pwa'].forEach(m => DF[m] && DF[m].init && DF[m].init());
+    ['card', 'filters', 'list', 'stats', 'lasso', 'imports', 'admin', 'pins', 'turf', 'pwa', 'cardplus', 'followups'].forEach(m => DF[m] && DF[m].init && DF[m].init());
     DF.map.init('map');
     DF.tools.init();
     DF.sync.startAuto();

@@ -33,6 +33,7 @@
     const r = DF.roster.get(id) || { id: '', name: '', role: 'Agent', team: '', campaigns: [], color: '#00a3a3' };
     $('#rf-id').value = r.id; $('#rf-name').value = r.name; $('#rf-role').value = r.role; $('#rf-team').value = r.team || ''; $('#rf-color').value = COLOR.test(r.color) ? r.color : '#00a3a3';
     $('#rf-pin').value = ''; DF.$$('#rf-camps input').forEach(i => { i.checked = (r.campaigns || []).includes(i.value); });
+    $('#rf-default').innerHTML = '<option value="">Auto (first campaign)</option>' + DF.campaigns().map(c => '<option>' + DF.esc(c) + '</option>').join(''); $('#rf-default').value = r.defaultCampaign || '';
     $('#roster-form').hidden = false;
   }
   async function saveRep(e) {
@@ -44,6 +45,7 @@
     if (!old && list.some(x => x.id === r.id)) r.id += '-' + list.length;
     Object.assign(r, { name, role: $('#rf-role').value, team: $('#rf-team').value.trim(), color: COLOR.test($('#rf-color').value) ? $('#rf-color').value : '#888888',
       campaigns: DF.$$('#rf-camps input').filter(i => i.checked).map(i => i.value) });
+    const dc = $('#rf-default').value; if (dc) { r.defaultCampaign = dc; r.campaigns = [dc].concat(r.campaigns.filter(c => c !== dc && (c !== '*' || r.campaigns.includes('*')))); } else delete r.defaultCampaign;   // default first: survives the server roster
     const pin = $('#rf-pin').value.trim();
     if (pin === '-') delete r.pin; else if (/^\d{4,8}$/.test(pin)) r.pin = DF.hash(r.id + ':' + pin);   // convenience lock, not real security
     if (!old) list.push(r);

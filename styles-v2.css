@@ -128,3 +128,16 @@ h3 .btn { text-transform: none; letter-spacing: 0; padding: 4px 10px; font-size:
 .note-chip { background: #3c4043; color: #fff; }
 .timeline .h-note p { font-weight: 600; }
 #search-geo { margin: 6px 0 0; width: 100%; } #search-geo[hidden] { display: none; }
+/* v2.4.4 pin drawer velocity + follow-ups */
+.card-score { display: flex; gap: 10px; align-items: center; font-size: 12px; line-height: 18px; color: var(--muted); margin: 0 0 2px; } .card-score b { color: var(--ink); font-size: 13px; } .card-score .small { margin-left: auto; padding: 0 10px; font-size: 12px; line-height: 18px; }
+.card .lead-menu { padding-top: 3px; padding-bottom: 3px; } .note-bar { padding-top: 4px; } .note-bar input { padding: 6px 9px; } .card-actions { margin: 2px 0 4px; }
+.icon-btn[hidden] { display: none; } .icon-btn.call { background: #1e8e3e; }
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: #1a73e8; color: #fff; text-decoration: none; font-size: 16px; margin-right: 6px; }
+#card-address { cursor: pointer; } #card-address.copied::after { content: '  ✓ Copied'; color: #1e8e3e; font-weight: 700; }
+#forms-groupme.copied::after { content: ' ✓'; }
+.followups { margin: 8px 0; } .followups[hidden] { display: none; } .fu-list { list-style: none; padding: 0; margin: 4px 0 10px; }
+.fu-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--line); } .fu-act { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+.badge-n { font-size: 12px; }
+.card-head > div:first-child { min-width: 0; flex: 1; } .card-head h2, .card-head .status-chip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; display: block; }
+.card-head .status-chip { display: inline-block; } .card-head-actions { gap: 6px; flex-shrink: 0; } .card-head-actions .icon-btn { width: 30px; height: 30px; font-size: 14px; margin-right: 0; }
+.card-head-actions .pill-outline { padding: 4px 10px; font-size: 13px; } .card-actions .btn { white-space: nowrap; padding: 7px 4px; font-size: 13px; }

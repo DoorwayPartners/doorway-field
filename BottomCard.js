@@ -50,13 +50,13 @@
     $('#card-status').textContent = st(r.status_code).label;
     $('#card-status').className = 'status-chip chip-' + r.status_code;
     $('#card-address').textContent = addr(r) + ', ' + [r.city, r.state, r.zip].filter(Boolean).join(' ');
-    $('#card-dir').href = 'https://maps.google.com/?daddr=' + r.lat + ',' + r.lng;                 // 1-tap turn-by-turn in native maps
     const le = DF.sync.events(r.lead_id).filter(e => e.type === 'note' || e.type === 'status').pop();
     $('#card-last').textContent = le ? 'Last: ' + (le.type === 'note' ? '📝 ' + le.text : st(le.to).short) + ' · ' + DF.firstName(le.rep) + ' · ' + DF.fmtTime(le.device_ts) : '';
     $('#card-meta').textContent = r.campaign + ' · ' + DF.roster.name(r.assigned_rep_email);
     $('#card-appt').textContent = r.appt_at ? 'Appointment / callback ' + DF.fmtTime(r.appt_at) : '';
     $('#card-intel').textContent = r.turf_intel_note || '';
     DF.$$('#lead-menu .dispo').forEach(b => b.classList.toggle('on', b.dataset.code === r.status_code));
+    DF.bus.emit('card:painted', r);                                       // CardPlus: stepper, Call / Text, nav, scoreboard
   }
   function open(id) {
     const t0 = performance.now(), r = DF.sync.get(id); if (!r) return;
@@ -87,13 +87,14 @@
   function buildForms() {
     $('#forms-fields').innerHTML = DF.cfg.SOLD_FIELDS.slice(0, 4).map(f => '<label><span>' + DF.esc(f.label) + (f.required ? ' *' : '') + '</span><input name="' + DF.esc(f.key) + '" type="' + DF.esc(f.type) + '"' + (f.required ? ' required' : '') + '></label>').join('');
   }
-  function openForms() { const r = DF.sync.get(current); $('#forms-form').reset(); const n = $('#forms-fields input'); if (r && n) n.value = fullName(r); DF.openModal('modal-forms'); }
+  function openForms() { const r = DF.sync.get(current); $('#forms-form').reset(); const n = $('#forms-fields input'), p = $('#forms-fields input[name=phone]'); if (r && n) n.value = fullName(r); if (r && p) p.value = r.phone || ''; DF.openModal('modal-forms'); }
   function saveForms(e) {
     e.preventDefault(); if (!current) return;
     const form = {}; new FormData($('#forms-form')).forEach((v, k) => { form[k] = String(v).trim(); });
     if (DF.sync.get(current).status_code !== 'SOLD') dispose(current, 'SOLD', { source: 'tap', force: true });
-    DF.sync.mutate(current, {}, 'sold_form', { form });                         // order details live in the event log only
-    DF.closeModal('modal-forms'); paintCard(DF.sync.get(current)); DF.toast('SOLD order saved');
+    const sev = DF.sync.events(current).filter(x => x.type === 'status' && x.to === 'SOLD').pop(), text = DF.cardplus.orderText(form, DF.sync.get(current));
+    DF.sync.mutate(current, {}, 'sold_form', { form, ref: sev ? sev.event_id : '' });     // order rides with its SOLD knock event (event log only)
+    DF.closeModal('modal-forms'); paintCard(DF.sync.get(current)); DF.toast('SOLD order saved', 'Copy GroupMe', () => DF.cardplus.copy(text), 6000);
   }
   function saveNote(text, id) {
     id = id || current; text = String(text || '').trim().slice(0, 500); if (!text || !id) return;
@@ -141,7 +142,6 @@
     $('#card-details').addEventListener('click', () => { if (!current) return; DF.openModal('details'); renderDetails('info'); });
     $('#card-appt-btn').addEventListener('click', () => openAppt('appointment'));
     $('#card-cb-btn').addEventListener('click', () => openAppt('callback'));
-    $('#card-forms-btn').addEventListener('click', openForms);
     $('#card-note-form').addEventListener('submit', e => { e.preventDefault(); saveNote($('#card-note').value); $('#card-note').value = ''; });
     $('#appt-form').addEventListener('submit', saveAppt);
     $('#forms-form').addEventListener('submit', saveForms);

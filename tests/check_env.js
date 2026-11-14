@@ -11,7 +11,7 @@ function check(file) {
   Object.keys(env).forEach(k => { if (!KEYS.includes(k)) errs.push('key not allowed: ' + k); });
   if (env.API_URL && !/^https:\/\//.test(env.API_URL)) errs.push('API_URL must start with https://');
   if (process.argv.includes('--require-api') && !/^https:\/\/script\.google\.com\/.+\/exec$|^https:\/\/.+/.test(env.API_URL || '')) errs.push('API_URL is required (the live Field API /exec URL)');
-  if (env.BASEMAP && !['google', 'esri'].includes(env.BASEMAP)) errs.push("BASEMAP must be 'google' or 'esri'");
+  if (env.BASEMAP && !['google', 'esri', 'osm'].includes(env.BASEMAP)) errs.push("BASEMAP must be 'esri', 'osm' or 'google'");
   if (env.IMAGERY && !['esri', 'usgs'].includes(env.IMAGERY)) errs.push("IMAGERY must be 'esri' or 'usgs'");
   if (/[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z]{2,}/.test(src)) errs.push('no email addresses');
   return errs;

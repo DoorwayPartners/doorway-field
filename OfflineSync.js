@@ -158,7 +158,7 @@
       merge(j.leads);
       if (Array.isArray(j.roster) && j.roster.length) {                                  // server roster has no PIN hashes: keep this phone's own
         const loc = {}; (meta.roster || []).forEach(r => { loc[r.id] = r; });
-        await setMeta('roster', j.roster.map(r => Object.assign({}, r, loc[r.id] && loc[r.id].pin ? { pin: loc[r.id].pin } : {}, loc[r.id] && loc[r.id].invite ? { invite: loc[r.id].invite } : {}))); DF.bus.emit('roster:changed');
+        await setMeta('roster', j.roster.map(r => Object.assign({}, r, loc[r.id] && loc[r.id].pin ? { pin: loc[r.id].pin } : {}, loc[r.id] && loc[r.id].invite ? { invite: loc[r.id].invite } : {}, loc[r.id] && loc[r.id].defaultCampaign ? { defaultCampaign: loc[r.id].defaultCampaign } : {}))); DF.bus.emit('roster:changed');
       }
       if (Array.isArray(j.campaigns) && j.campaigns.length) await setMeta('campaigns', j.campaigns);
       if (j.server_ts) await setMeta('since', j.server_ts);
