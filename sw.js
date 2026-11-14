@@ -1,6 +1,6 @@
 // Doorway Field v1.0 — service worker: app shell offline (cache-first), viewed map tiles cached at runtime (capped),
 // API calls never cached. Background Sync (Android/Chrome only) just asks the open page to flush; iPhone flushes on open.
-const SHELL = 'df-shell-1.1.0';
+const SHELL = 'df-shell-1.1.1';
 const TILES = 'df-tiles-1';
 const TILE_CAP = 1500;   // viewed tiles only; no bulk pre-download (OpenFreeMap / Esri terms)
 const ASSETS = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'OfflineSync.js', 'MapEngine.js', 'BottomCard.js', 'TurfAdmin.js', 'LeadImport.js',

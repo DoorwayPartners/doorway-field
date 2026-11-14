@@ -1,7 +1,7 @@
-// Doorway Field v1.1.0 — PUBLISH config (config.publish.js -> Pages repo config.js; never in Drive). Owner only; REPS added later. Was: PLACEHOLDERS ONLY: no secrets, no Drive/Sheet/Script IDs in source.
+// Doorway Field v1.1.1 — PUBLISH config (config.publish.js -> Pages repo config.js; never in Drive). Owner only; REPS added later. Was: PLACEHOLDERS ONLY: no secrets, no Drive/Sheet/Script IDs in source.
 // Kim fills the blanks at publish time from the deploy env (see MANIFEST.json "config_fill"). Public tile URLs only.
 window.DF_CONFIG = Object.assign({
-  VERSION: '1.1.0',
+  VERSION: '1.1.1',
   ORG_ID: 'doorway',
   OWNER_DOMAIN: 'doorwaypartners.com',
   OWNER_EMAILS: ['cristian@doorwaypartners.com'],            // fill at publish: owner allow-list (UI gate only; the API re-checks every owner action)

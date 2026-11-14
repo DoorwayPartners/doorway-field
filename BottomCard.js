@@ -113,7 +113,7 @@
     $('#details-title').textContent = addr(r);
     if (tab === 'info') {
       const rows = [['First Name', r.first_name], ['Last Name', r.last_name], ['Phone', r.phone], ['Email', r.email], ['Address', r.address], ['Apt', r.apt],
-        ['City', r.city], ['Zip', r.zip], ['Assigned Rep', r.assigned_rep_email], ['Appointment', DF.fmtTime(r.appt_at)], ['Turf', r.turf_id], ['Turf intel', r.turf_intel_note]];
+        ['City', r.city], ['Zip', r.zip], ['Assigned Rep', r.assigned_rep_email || 'Unassigned'], ['Appointment', DF.fmtTime(r.appt_at)], ['Turf', r.turf_id], ['Turf intel', r.turf_intel_note]];
       body.innerHTML = '<dl class="info">' + rows.map(x => '<dt>' + x[0] + '</dt><dd>' + (DF.esc(x[1]) || '—') + '</dd>').join('') + '</dl>' +
         '<div class="status-grid">' + DF.sync.STATUS.filter(s => s.menu).map(s => '<button type="button" class="dispo dispo-' + s.code + (s.code === r.status_code ? ' on' : '') +
         '" data-code="' + s.code + '"><i>' + DF.esc(s.icon) + '</i><span>' + DF.esc(s.short) + '</span></button>').join('') + '</div>' +

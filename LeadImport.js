@@ -82,17 +82,18 @@
     return { filename, rows, map: hm.map, unmapped: hm.unmapped, salesrabbit: hm.salesrabbit, missing: ['address', 'lat', 'lng'].filter(f => hm.map[f] === undefined) };
   }
   function check(raw, line, turf, seen) {
+    const hasXY = raw.lat !== undefined && raw.lng !== undefined && raw.lat !== '' && raw.lng !== '';
+    if (!raw.address && hasXY) raw = Object.assign({}, raw, { address: 'Pin ' + raw.lat + ', ' + raw.lng });   // coordinates-only row: label the pin
     const errs = [], lt = /^(dnc|excluded_dnc)$/i.test(raw.status_code || '');
     const notes = [raw.rep_note, raw._business ? 'Business: ' + raw._business : ''].filter(Boolean).join(' · ');
     const appt = parseDate(raw.appt_at), created = parseDate(raw._created);
     const id = DF.sync.leadId(raw.address, raw.apt, String(raw.zip || '').replace(/\D/g, '').slice(0, 5).padStart(raw.zip ? 5 : 0, '0')), cur = DF.sync.get(id);
     const lead = DF.sync.normalize(Object.assign({}, raw, { org_id: raw.org_id || DF.cfg.ORG_ID, turf_id: raw.turf_id || (cur ? cur.turf_id : turf), status_code: statusFrom(raw.status_code),
       rep_note: notes, appt_at: appt || '', updated_at: '' }));
-    if (!raw.address) errs.push('missing Address');
-    if (raw.lat === undefined || raw.lng === undefined || raw.lat === '' || raw.lng === '') errs.push('missing Latitude/Longitude');
+    if (!raw.address && !hasXY) errs.push('missing Address and Latitude/Longitude');
+    else if (!hasXY) errs.push('needs Latitude/Longitude to place the pin (no free geocoder)');
     else if (!isFinite(lead.lat) || !isFinite(lead.lng) || Math.abs(lead.lat) > 90 || Math.abs(lead.lng) > 180 || (lead.lat === 0 && lead.lng === 0)) errs.push('invalid coordinates');
-    if (!lead.assigned_rep_email) errs.push('missing Assigned to (email)');
-    else if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(lead.assigned_rep_email)) errs.push('bad Assigned to (email)');
+    // v1.1.1: Assigned to (email) is never a reason to reject; blank = Unassigned, unknown/external emails are kept as-is
     if (lt) errs.push('DNC is never imported');
     else if (!DF.sync.BY_CODE[lead.status_code]) errs.push('unknown status ' + raw.status_code);
     if (lead.zip && !/^\d{5}$/.test(lead.zip)) errs.push('bad Postal Code');
@@ -117,7 +118,7 @@
     $('#pv-missing').textContent = pending.missing.length ? 'Missing columns: ' + pending.missing.join(', ') : '';
     $('#pv-body').innerHTML = show.slice(0, 500).map(r => '<tr class="' + (r.ok ? 'ok' : 'bad') + '" data-line="' + r.line + '"><td>' + r.line + '</td><td>' + (r.ok ? (r.exists ? 'update' : 'new') : '✕') +
       '</td><td class="issues">' + DF.esc(r.errors.join('; ')) + '</td><td>' + DF.esc(r.raw.address || '') + (r.raw.apt ? ' ' + DF.esc(r.raw.apt) : '') + '</td><td>' + DF.esc([r.raw.city, r.raw.state, r.raw.zip].filter(Boolean).join(' ')) +
-      '</td><td>' + DF.esc(r.raw.lat || '') + ', ' + DF.esc(r.raw.lng || '') + '</td><td>' + DF.esc(r.lead.assigned_rep_email || '—') + '</td><td>' + DF.esc(r.lead.status_code) +
+      '</td><td>' + DF.esc(r.raw.lat || '') + ', ' + DF.esc(r.raw.lng || '') + '</td><td>' + DF.esc(r.lead.assigned_rep_email ? r.lead.assigned_rep_email + (r.rep_name ? ' (' + r.rep_name + ')' : '') : 'Unassigned' + (r.rep_name ? ' (' + r.rep_name + ')' : '')) + '</td><td>' + DF.esc(r.lead.status_code) +
       '</td></tr>').join('') + (show.length > 500 ? '<tr><td colspan="8">First 500 of ' + show.length + ' rows shown</td></tr>' : '');
     return { all: all.length, valid: ok.length, invalid: bad.length, shown: Math.min(show.length, 500) };
   }
@@ -130,9 +131,7 @@
   async function preview(text, filename) {
     if (!DF.admin.isOwner(DF.auth.email)) { DF.toast('Owner only'); return null; }
     pending = analyze(text, filename); filter = 'all';
-    pending.rows.forEach(r => { if (r.rep_name && r.lead.assigned_rep_email && !(DF.cfg.REPS || []).some(x => x.email === r.lead.assigned_rep_email)) (DF.cfg.REPS = DF.cfg.REPS || []).push({ email: r.lead.assigned_rep_email, name: r.rep_name }); });
-    const reps = (DF.cfg.REPS || []).map(r => '<option value="' + DF.esc(r.email) + '">' + DF.esc(r.name || r.email) + '</option>').join('');
-    $('#pv-assign').innerHTML = '<option value="">Assign blanks to…</option>' + reps;
+    $('#pv-assign').innerHTML = '<option value="">Assign Unassigned rows to…</option>' + reps().map(r => '<option value="' + DF.esc(r.email) + '">' + DF.esc(r.name || r.email) + '</option>').join('');
     return renderPreview();
   }
   async function submit() {
@@ -145,6 +144,15 @@
     pending = null; renderPreview(); renderHistory(); DF.admin.renderProgress();
     DF.toast(rec.processed + ' pins on the map');
     return rec;
+  }
+  // Rep picker = owner + config REPS + reps named in the CSV being previewed + reps already on the map (nothing hardcoded in source)
+  function reps() {
+    const out = [], add = (email, name) => { email = String(email || '').trim().toLowerCase(); if (!email) return; const r = out.find(x => x.email === email); if (r) { r.name = r.name || name; } else out.push({ email, name: name || '' }); };
+    (DF.cfg.OWNER_EMAILS || []).forEach(e => add(e, 'Owner'));
+    (DF.cfg.REPS || []).forEach(r => add(r.email, r.name));
+    (pending ? pending.rows : []).forEach(r => add(r.lead.assigned_rep_email, r.rep_name));
+    DF.sync.all().forEach(r => add(r.assigned_rep_email));
+    return out;
   }
   const history = () => DF.sync.meta('imports') || [];
   function renderHistory() {
@@ -176,6 +184,6 @@
     DF.bus.on('tab:changed', t => { if (t === 'admin') renderHistory(); });
   }
 
-  DF.imports = { init, SR_HEADERS, parseCsv, mapHeaders, analyze, parseDate, preview, submit, assignBlanks, history, sampleCsv, renderPreview,
+  DF.imports = { init, reps, SR_HEADERS, parseCsv, mapHeaders, analyze, parseDate, preview, submit, assignBlanks, history, sampleCsv, renderPreview,
     setFilter: f => { filter = f; return renderPreview(); }, pending: () => pending };
 })();

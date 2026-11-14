@@ -42,8 +42,7 @@
     return rows;
   }
   function repOptions() {
-    const reps = (DF.cfg.REPS || []).slice();
-    DF.sync.all().forEach(r => { if (r.assigned_rep_email && !reps.some(x => x.email === r.assigned_rep_email)) reps.push({ email: r.assigned_rep_email }); });
+    const reps = DF.imports.reps();   // owner + CSV + map reps, built at runtime (v1.1.1)
     $('#turf-rep').innerHTML = '<option value="">Unassigned</option>' + reps.map(r => '<option value="' + DF.esc(r.email) + '">' + DF.esc(r.name || r.email) + '</option>').join('');
   }
 
