@@ -110,6 +110,7 @@
     await signIn();
     DF.card.init();
     DF.admin.init();
+    DF.imports.init();
     DF.map.init('map');
     DF.sync.startAuto();
     DF.showTab('map');

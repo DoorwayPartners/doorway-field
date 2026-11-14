@@ -19,6 +19,7 @@
   <script src="MapEngine.js" defer></script>
   <script src="BottomCard.js" defer></script>
   <script src="TurfAdmin.js" defer></script>
+  <script src="LeadImport.js" defer></script>
 </head>
 <body>
 <main id="app">
@@ -77,9 +78,18 @@
   <section id="view-admin" class="view" aria-label="Admin">
     <header class="viewhead"><h1>Turf Admin</h1><p class="muted">Owner only · every action is re-checked by the server</p></header>
     <h3>Import leads (CSV)</h3>
-    <div id="drop-zone" class="drop-zone" role="button" tabindex="0">Drop a CSV here or tap to choose<small>Doorway schema, Tool #1 export, or raw address + lat + lng</small></div>
+    <p class="muted">SalesRabbit 19-column format, Doorway schema, Tool #1 export, or raw address + lat + lng. <a href="#" id="sample-csv" class="link">Download Sample CSV</a></p>
+    <div id="drop-zone" class="drop-zone" role="button" tabindex="0">Drop a CSV here or tap to choose<small>Nothing is added until you review and Submit</small></div>
     <input id="csv-input" type="file" accept=".csv,text/csv" hidden>
+    <section id="import-preview" class="preview" hidden>
+      <p id="pv-file" class="muted"></p><p id="pv-missing" class="rejects"></p>
+      <div class="pv-tabs"><button type="button" class="pv-tab active" id="pv-tab-all" data-filter="all">All</button><button type="button" class="pv-tab" id="pv-tab-valid" data-filter="valid">Valid</button><button type="button" class="pv-tab" id="pv-tab-invalid" data-filter="invalid">Invalid</button></div>
+      <div class="pv-scroll"><table class="grid"><thead><tr><th>Line</th><th>Result</th><th>Issues</th><th>Address</th><th>City / State / Zip</th><th>Lat, Lng</th><th>Assigned to</th><th>Status</th></tr></thead><tbody id="pv-body"></tbody></table></div>
+      <div class="pv-actions"><select id="pv-assign" aria-label="Assign rows with no rep"></select><button type="button" class="btn" id="pv-cancel">Cancel</button><button type="button" class="btn primary" id="pv-submit">Submit</button></div>
+    </section>
     <div id="import-report" class="report"></div>
+    <h3>Imports</h3>
+    <div class="pv-scroll"><table class="grid"><thead><tr><th>Status</th><th>Created</th><th>File Name</th><th>Imported By</th><th>Valid Submissions</th><th>Total Submitted</th><th>Total Processed</th></tr></thead><tbody id="imports-body"></tbody></table></div>
     <h3>Create turf</h3>
     <div class="turf-form"><input id="turf-name" placeholder="Turf name"><select id="turf-rep" aria-label="Assign rep"></select><button type="button" class="btn primary" id="turf-draw">Draw on map</button></div>
     <h3>Live progress</h3>

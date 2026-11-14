@@ -152,6 +152,19 @@ h3 { margin: 22px 0 8px; font-size: 15px; text-transform: uppercase; letter-spac
 .drop-zone small { color: var(--muted); font-weight: 400; }
 .drop-zone.hover { border-color: var(--red); background: #fff4f4; }
 .report p { margin: 8px 0 2px; }
+.link { color: var(--red); font-weight: 600; }
+.preview { border: 1px solid var(--line); border-radius: 14px; padding: 10px; margin-top: 10px; }
+.pv-tabs { display: flex; background: var(--soft); border-radius: 12px; padding: 3px; margin: 6px 0 8px; }
+.pv-tab { flex: 1; border: 0; background: none; padding: 7px; border-radius: 10px; font-weight: 600; color: var(--muted); font-size: 13px; }
+.pv-tab.active { background: #fff; color: var(--ink); box-shadow: 0 1px 4px rgba(0, 0, 0, .12); }
+.pv-scroll { overflow-x: auto; max-height: 45dvh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.grid { border-collapse: collapse; font-size: 12px; min-width: 100%; }
+.grid th { position: sticky; top: 0; background: var(--soft); text-align: left; padding: 6px; white-space: nowrap; }
+.grid td { padding: 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.grid tr.bad td { background: #fff4f4; } .grid td.issues { color: var(--red); white-space: normal; min-width: 160px; }
+.pv-actions { display: flex; gap: 8px; margin-top: 10px; } .pv-actions select { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 10px; padding: 9px; background: #fff; }
+.btn:disabled { opacity: .45; }
+.imp-status { border-radius: 999px; padding: 2px 8px; font-weight: 600; } .imp-ok { background: #e6f4ea; color: #1e8e3e; } .imp-warn { background: #fef7e0; color: #b06000; }
 .rejects { color: var(--red); font-size: 13px; padding-left: 18px; }
 .turf-form { display: flex; flex-wrap: wrap; gap: 8px; }
 .progress table { width: 100%; border-collapse: collapse; font-size: 14px; }
