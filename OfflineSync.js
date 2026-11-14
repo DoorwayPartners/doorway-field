@@ -111,7 +111,7 @@
     ev = Object.assign({ event_id: uuid(), org_id: DF.cfg.ORG_ID, rep: DF.auth.id, device_ts: new Date().toISOString() }, ev);
     events.push(ev); queue.set(ev.event_id, ev);
     Promise.resolve().then(() => Promise.all([putMany('events', [ev]), putMany('queue', [ev])])).catch(e => console.error('[DF] idb', e));
-    scheduleFlush(1500);
+    if (queue.size >= 25) scheduleFlush(1500);                             // v2.4.2: batched (120 s / screen-off / manual Sync), not per tap
     return ev;
   }
   function mutate(id, patch, type, extra) {
@@ -141,20 +141,25 @@
 
   // ---- flush: text/plain POST (no CORS preflight for Apps Script), idempotent on event_id ----
   const syncUrl = () => meta.sync_url || DF.cfg.API_URL;
-  async function flush() {
+  async function flush(opts) {
     if (flushing || !syncUrl() || navigator.onLine === false) { DF.bus.emit('sync:state', queue.size ? 'pending' : 'local'); return { skipped: true }; }
     flushing = true; DF.bus.emit('sync:state', 'syncing');
     const batch = Array.from(queue.values()).slice(0, 200);
     try {
-      const res = await fetch(syncUrl(), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'sync', org_id: DF.cfg.ORG_ID, rep: DF.auth.id, since: meta.since || '', events: batch }) });
+      const payload = JSON.stringify({ action: 'sync', org_id: DF.cfg.ORG_ID, rep: DF.auth.id, session: (DF.store.get('session', null) || {}).token || '', since: meta.since || '', events: batch });
+      const res = await fetch(syncUrl(), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: payload,
+        keepalive: !!(opts && opts.hidden) && payload.length < 60000 });   // screen-off flush survives the app going to the background
       const j = await res.json();
+      if (!j.ok && j.error === 'auth') DF.bus.emit('sync:auth');                          // no / expired session: the app asks for the PIN again
       if (!j.ok) throw new Error(j.error || 'sync refused');
       const acc = j.accepted || batch.map(e => e.event_id);
       acc.forEach(id => queue.delete(id));
       if (acc.length) await idb('queue', 'readwrite', s => { acc.forEach(id => s.delete(id)); });
       merge(j.leads);
-      if (Array.isArray(j.roster) && j.roster.length) { await setMeta('roster', j.roster); DF.bus.emit('roster:changed'); }   // private roster lives server-side
+      if (Array.isArray(j.roster) && j.roster.length) {                                  // server roster has no PIN hashes: keep this phone's own
+        const loc = {}; (meta.roster || []).forEach(r => { loc[r.id] = r; });
+        await setMeta('roster', j.roster.map(r => Object.assign({}, r, loc[r.id] && loc[r.id].pin ? { pin: loc[r.id].pin } : {}, loc[r.id] && loc[r.id].invite ? { invite: loc[r.id].invite } : {}))); DF.bus.emit('roster:changed');
+      }
       if (Array.isArray(j.campaigns) && j.campaigns.length) await setMeta('campaigns', j.campaigns);
       if (j.server_ts) await setMeta('since', j.server_ts);
       DF.bus.emit('sync:state', queue.size ? 'pending' : 'synced');
@@ -166,7 +171,7 @@
   function startAuto() {
     window.addEventListener('online', () => flush());
     window.addEventListener('offline', () => DF.bus.emit('sync:state', 'offline'));
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') flush(); });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { if (queue.size) flush({ hidden: true }); } else flush(); });
     window.addEventListener('focus', () => flush());
     setInterval(flush, DF.cfg.FLUSH_EVERY_MS);
     flush();

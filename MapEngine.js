@@ -105,8 +105,9 @@
       map.addSource('route', { type: 'geojson', data: EMPTY });
       map.addLayer({ id: 'route-line', type: 'line', source: 'route', filter: ['==', ['geometry-type'], 'LineString'], paint: { 'line-color': '#1d1d1f', 'line-width': 3, 'line-opacity': 0.7 } });
       map.addLayer({ id: 'route-stops', type: 'symbol', source: 'route', filter: ['==', ['geometry-type'], 'Point'], layout: { 'icon-image': ['concat', 'stop-', ['to-string', ['get', 'n']]], 'icon-allow-overlap': true, 'icon-offset': [0, -16] } });
-      map.addSource('me', { type: 'geojson', data: EMPTY });
-      map.addLayer({ id: 'me', type: 'circle', source: 'me', paint: { 'circle-radius': 8, 'circle-color': '#2f80ed', 'circle-stroke-color': WHITE, 'circle-stroke-width': 3 } });
+      map.addSource('me', { type: 'geojson', data: EMPTY });                        // empty until a REAL GPS fix (no fallback position, ever)
+      map.addLayer({ id: 'me-acc', type: 'fill', source: 'me', filter: ['==', ['geometry-type'], 'Polygon'], paint: { 'fill-color': '#2f80ed', 'fill-opacity': 0.15, 'fill-outline-color': 'rgba(47,128,237,0.5)' } });
+      map.addLayer({ id: 'me', type: 'circle', source: 'me', filter: ['==', ['geometry-type'], 'Point'], paint: { 'circle-radius': 8, 'circle-color': '#2f80ed', 'circle-stroke-color': WHITE, 'circle-stroke-width': 3 } });
     }
     selected.forEach(id => map.setFeatureState({ source: 'leads', id }, { sel: true }));
     DF.bus.emit('map:layers');
@@ -181,8 +182,11 @@
     mode = DF.map.mode = DF.store.get('mapMode', DF.cfg.DEFAULT_MODE); label(mode);
     const rows = DF.sync.all().filter(visible), b = new maplibregl.LngLatBounds();
     rows.forEach(r => b.extend([r.lng, r.lat]));
-    map = new maplibregl.Map({ container, style: buildStyle(mode), attributionControl: false, dragRotate: true, touchPitch: false,
+    // v2.4.2: north-up only (labels never upside down) · no tile fade animation + no re-fetch of expired tiles (battery + data)
+    map = new maplibregl.Map({ container, style: buildStyle(mode), attributionControl: false, dragRotate: false, pitchWithRotate: false, touchPitch: false, maxPitch: 0,
+      fadeDuration: 0, refreshExpiredTiles: false,
       center: rows.length ? b.getCenter() : [-98.5, 39.8], zoom: rows.length ? 13 : 3, maxZoom: 20 });
+    map.touchZoomRotate.disableRotation(); map.keyboard.disableRotation();
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
     map.on('style.load', addLayers);
     let tileErr = 0, tileOk = false;                                 // Google unreachable / blocked → Esri imagery, same modes

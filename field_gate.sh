@@ -13,6 +13,7 @@ command -v node >/dev/null || die "node >= 18 not found"
 node -e 'require("playwright").chromium.executablePath()' >/dev/null 2>&1 || npx playwright install chromium
 [ ! -f config.env.js ] || node tests/check_env.js config.env.js || die "config.env.js rejected (allowed: API_URL https, ORG_ID, BASEMAP, IMAGERY)"
 node tests/scan_secrets_csp.js || die "secret / CSP scan failed. Nothing was published."
+[ ! -d server ] || node tests/test_field_api.js || die "Field API (server) suite failed. Nothing was published."
 node tests/test_doorway_field.js || die "core golden suite failed. Nothing was published."
 node tests/test_field_v2.js || die "v2 golden suite failed. Nothing was published."
 [ "$PUBLISH" = 1 ] || { echo "GATE PASS (dry run; nothing published)"; exit 0; }
@@ -26,7 +27,7 @@ if [ ! -f config.env.js ] && [ -f config.publish.js ]; then          # one-time 
   echo "migrated API_URL from config.publish.js into config.env.js (config.publish.js is no longer used)"
 fi
 [ -f config.env.js ] || die "config.env.js missing: cp config.env.example.js config.env.js and set API_URL (one time; deploys never touch it)"
-node tests/check_env.js config.env.js || die "config.env.js rejected (allowed: API_URL https, ORG_ID, BASEMAP, IMAGERY)"
+node tests/check_env.js config.env.js --require-api || die "config.env.js needs the live Field API /exec URL in API_URL (v2.4.1+ sign-in is server-checked: deploy server/FieldApi.gs first, see MANIFEST.server)"
 find "$FIELD_PAGES_REPO" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
 cp app/* "$FIELD_PAGES_REPO/" && cp config.env.js "$FIELD_PAGES_REPO/config.env.js" && echo "$FIELD_DOMAIN" > "$FIELD_PAGES_REPO/CNAME"
 # tests + workflow ride along so GitHub Actions (auto-gate.yml) re-runs the gate on every push ($0 on a public repo)

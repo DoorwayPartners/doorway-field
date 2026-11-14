@@ -275,9 +275,9 @@ const lines = t => t.trimEnd().split('\r\n');
     await iv.page.waitForSelector('#modal-signin.open');
     const ivs = await iv.page.evaluate(() => ({ sel: DF.$('#signin-name').value, title: DF.$('#signin-title').textContent, pinRow: !DF.$('#signin-pin-row').hidden, label: DF.$('#signin-pin-label').textContent, url: location.search }));
     await iv.page.fill('#signin-pin', '2468'); await iv.page.click('#signin-form button[type=submit]'); await ready(iv.page);
-    const iva = await iv.page.evaluate(() => ({ id: DF.auth.id, role: DF.auth.role, camps: DF.auth.campaigns.join(), pin: DF.roster.get('agent-1').pin === DF.hash('agent-1:2468') }));
-    ok(ivs.sel === 'agent-1' && /Welcome, Agent/.test(ivs.title) && ivs.pinRow && /optional/i.test(ivs.label) && ivs.url === '' && iva.id === 'agent-1' && iva.role === 'Agent' && iva.camps === 'Fidium' && iva.pin,
-      'token redeemed via the Sync endpoint: role from the authorized roster (URL role=Owner ignored), optional PIN, link cleared', [ivs, iva]);
+    const iva = await iv.page.evaluate(() => ({ id: DF.auth.id, role: DF.auth.role, camps: DF.auth.campaigns.join(), pin: DF.roster.get('agent-1').pin === DF.hash('agent-1:2468'), sess: !!(DF.store.get('session') || {}).token, pinSet: DF.sync.events().some(e => e.type === 'pin_set') }));
+    ok(ivs.sel === 'agent-1' && /Welcome, Agent/.test(ivs.title) && ivs.pinRow && /Set your PIN/.test(ivs.label) && ivs.url === '' && iva.id === 'agent-1' && iva.role === 'Agent' && iva.camps === 'Fidium' && iva.pin && iva.sess && iva.pinSet,
+      'token redeemed via the Sync endpoint: role from the authorized roster (URL role=Owner ignored), session, required PIN set + synced, link cleared', [ivs, iva]);
     await iv.context.close();
     const fk = await newPage(L.browser, L.base, { path: '?token=' + invToken });   // same token again (single use) + spoofed legacy link both fail closed
     await fk.page.waitForSelector('#modal-signin.open');
@@ -287,8 +287,8 @@ const lines = t => t.trimEnd().split('\r\n');
     const lgs = await lgp.page.evaluate(() => ({ err: DF.$('#signin-err').textContent, hacker: !!DF.roster.get('hacker') })); await lgp.context.close();
     ok(/not verified/.test(fks.err) && fks.owners === 1 && fks.url === '' && /no longer work/.test(lgs.err) && !lgs.hacker, 'used / forged tokens and old ?invite=&role= links grant nothing (fail closed)', [fks, lgs]);
     const ev = await newPage(L.browser, L.base, { user: AGENT_A, env: { API_URL: 'https://env.test/exec', ORG_ID: 'doorway-env', BASEMAP: 'esri', ROSTER: [{ id: 'leak', name: 'Leak Person', role: 'Owner' }] } }); await ready(ev.page);
-    const evs = await ev.page.evaluate(() => ({ org: DF.cfg.ORG_ID, base: DF.cfg.BASEMAP, tiles: DF.map.instance.getStyle().sources.imagery.tiles[0], leak: DF.cfg.ROSTER.some(r => r.id === 'leak') || !!DF.roster.get('leak') }));
-    ok(evs.org === 'doorway-env' && evs.base === 'esri' && /arcgisonline/.test(evs.tiles) && !evs.leak, 'config.env.js loads before config.public.js; only whitelisted keys apply (a roster can never be injected)', evs);
+    const evs = await ev.page.evaluate(() => ({ nag: (DF.bus.emit('sync:auth'), /sign in again/i.test(DF.$('#toast-msg').textContent) && DF.$('#toast-action').textContent === 'Sign in'), org: DF.cfg.ORG_ID, base: DF.cfg.BASEMAP, tiles: DF.map.instance.getStyle().sources.imagery.tiles[0], leak: DF.cfg.ROSTER.some(r => r.id === 'leak') || !!DF.roster.get('leak') }));
+    ok(evs.org === 'doorway-env' && evs.base === 'esri' && /arcgisonline/.test(evs.tiles) && !evs.leak && evs.nag, 'config.env.js loads before config.public.js; only whitelisted keys apply · a refused sync session prompts PIN sign-in', evs);
     await ev.context.close();
     const j = await newPage(L.browser, L.base, { user: AGENT_B }); await ready(j.page);
     ok((await j.page.$$eval('#campaign-menu button', b => b.map(x => x.textContent))).join() === 'Fidium,AT&T Fiber', 'Agent with 2 campaigns flips between them (no All Campaigns)');

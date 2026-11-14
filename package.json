@@ -1,6 +1,6 @@
 {
   "name": "doorway-field",
-  "version": "2.4.0",
+  "version": "2.4.2",
   "private": true,
   "description": "Doorway Field v2.0: standalone mobile PWA (0 AI, $0 tiles). Front end only; npm test = scan + core + v2 golden suites",
   "scripts": { "test": "node tests/scan_secrets_csp.js && node tests/test_doorway_field.js && node tests/test_field_v2.js", "gate": "bash field_gate.sh" },

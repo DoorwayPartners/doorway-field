@@ -7,7 +7,9 @@ const MENU = ['NEW', 'NH1', 'NH2', 'NH3', 'GB', 'P_GB', 'SOLD', 'NI', 'APPT', 'P
 function scan(ok) {
   console.log('Guardrails');
   const tests = fs.readdirSync(__dirname).filter(f => /\.js$/.test(f)).map(f => path.join(__dirname, f));
-  const files = fs.readdirSync(APP).filter(f => /\.(js|html|css|webmanifest|svg)$/.test(f)).map(f => path.join(APP, f)).concat(tests, [FIX]);
+  const SRV = path.join(__dirname, '..', 'server'), srv = fs.existsSync(SRV) ? fs.readdirSync(SRV).filter(f => /\.gs$/.test(f)).map(f => path.join(SRV, f)) : [];
+  const files = fs.readdirSync(APP).filter(f => /\.(js|html|css|webmanifest|svg)$/.test(f)).map(f => path.join(APP, f)).concat(tests, [FIX], srv);
+  ok(!srv.filter(f => { const s = fs.readFileSync(f, 'utf8'); return /AKfycb|AIza[0-9A-Za-z_-]{20}|[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z]{2,}|['"][A-Za-z0-9_-]{33,}['"]/.test(s); }).length, 'server/*.gs: zero secrets, IDs or emails (Script Properties only)');
   const limit = f => /OfflineSync\.js$/.test(f) ? 250 : /tests[\\/]test_.*\.js$/.test(f) ? 350 : 300;   // golden test files: owner cap 350; app modules < 300
   files.forEach(f => { const n = fs.readFileSync(f, 'utf8').split('\n').length - 1; ok(n < limit(f), path.basename(f) + ' ' + n + ' lines < ' + limit(f)); });
   const code = fs.readdirSync(APP).filter(f => /\.(js|html|css|webmanifest)$/.test(f)).map(f => [f, fs.readFileSync(path.join(APP, f), 'utf8')]);

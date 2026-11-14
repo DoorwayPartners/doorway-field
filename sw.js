@@ -1,8 +1,9 @@
 // Doorway Field v2.0 — service worker: app shell offline (cache-first), viewed map tiles cached at runtime (capped),
 // API calls never cached. Background Sync (Android/Chrome only) just asks the open page to flush; iPhone flushes on open.
-const SHELL = 'df-shell-2.4.0';
+const SHELL = 'df-shell-2.4.2';
 const TILES = 'df-tiles-1';
-const TILE_CAP = 1500;   // viewed tiles only; no bulk pre-download (OpenFreeMap / Esri terms)
+const TILE_CAP = 3000;   // viewed tiles only (re-panning turf = 0 data); no bulk pre-download (OpenFreeMap / Esri terms). Google tiles: browser HTTP cache only (Google terms)
+let puts = 0;
 const ASSETS = ['./', 'index.html', 'styles.css', 'styles-v2.css', 'config.public.js', 'app.js', 'OfflineSync.js', 'MapEngine.js', 'MapTools.js', 'BottomCard.js', 'FilterDrawer.js',
   'LassoSheet.js', 'ListView.js', 'StatsView.js', 'LeadImport.js', 'AdminPanel.js', 'PinStudio.js', 'TurfZones.js', 'Pwa.js', 'manifest.webmanifest', 'icon.svg',
   'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js', 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css'];
@@ -23,7 +24,7 @@ self.addEventListener('fetch', e => {
     e.respondWith(caches.open(TILES).then(async c => {
       const hit = await c.match(req); if (hit) return hit;
       const res = await fetch(req);
-      if (res.ok) { c.put(req, res.clone()); trim(c); }
+      if (res.ok) { c.put(req, res.clone()); if (++puts % 50 === 0) trim(c); }   // trim every 50 writes, not every tile
       return res;
     }).catch(() => caches.match(req)));
     return;

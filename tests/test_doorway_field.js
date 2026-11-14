@@ -104,10 +104,22 @@ const guardrails = () => require('./scan_secrets_csp.js').scan(ok);
       const s = await page.evaluate(() => { const st = DF.map.instance.getStyle(); return { tiles: st.sources.imagery ? st.sources.imagery.tiles[0] : '', leads: !!st.sources.leads, ring: !!DF.map.instance.getLayer('pin-stack') }; });
       ok(s.tiles.includes('google.com/vt/lyrs=' + { street: 'm', satellite: 's', hybrid: 'y' }[m] + '&') && s.leads && s.ring, 'Map Settings › ' + m + ' = Google lyrs=' + { street: 'm', satellite: 's', hybrid: 'y' }[m] + ' (pins + rings re-added)', s);
     }
-    await page.click('#pill-gps'); ok(await page.evaluate(() => DF.tools.following), 'Recenter GPS starts Follow Me');
-    await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); });
-    ok(!(await page.evaluate(() => DF.tools.following)), 'Follow Me stops when the app is hidden (no background GPS)');
-    await page.evaluate(() => { delete document.visibilityState; });
+    const rot = await page.evaluate(async () => { const m = DF.map.instance, me0 = m.getSource('me')._data.features.length; m.setBearing(40); DF.$('#pill-compass').click(); await new Promise(r => setTimeout(r, 450));
+      return { drag: m.dragRotate.isEnabled(), touch: m.touchZoomRotate._rotationDisabled === true, pitch: m.getMaxPitch(), bearing: Math.round(m.getBearing()), me0 }; });
+    ok(!rot.drag && rot.touch && rot.pitch === 0 && rot.bearing === 0, 'north-up lock: no drag / two-finger rotation, no pitch; compass resets bearing to 0', rot);
+    await page.evaluate(() => DF.map.jumpTo(DF.sync.all()[5].lead_id)); await page.click('#pill-gps'); await page.waitForFunction(() => DF.tools.following, null, { timeout: 8000 }); await page.waitForTimeout(700);
+    const dot = await page.evaluate(() => { const m = DF.map.instance, f = m.getSource('me')._data.features, c = m.getCenter(); const pt = (f.find(x => x.geometry.type === 'Point') || { geometry: { coordinates: [0, 0] } }).geometry.coordinates;
+      return { types: f.map(x => x.geometry.type).join(), dLat: Math.abs(c.lat - pt[1]), dLng: Math.abs(c.lng - pt[0]), acc: !!m.getLayer('me-acc'), fix: pt }; });
+    ok(rot.me0 === 0 && dot.types === 'Polygon,Point' && dot.acc && dot.dLat < 0.0005 && dot.dLng < 0.0005 && dot.fix[1] !== 0, 'blue dot hidden until a real fix; Locate Me = fresh fix → fly to the rep + accuracy ring + Follow Me', { rot, dot });
+    const jit = await page.evaluate(() => { const a = { latitude: 43.4394, longitude: -70.7743, accuracy: 8 }; DF.tools.onFix(a); return [DF.tools.onFix({ latitude: 43.43942, longitude: -70.7743, accuracy: 8 }), DF.tools.onFix({ latitude: 43.4395, longitude: -70.7743, accuracy: 8 })]; });
+    ok(jit[0] === false && jit[1] === true, 'GPS jitter filter: a 2 m wobble is ignored, a 11 m move is drawn', jit);
+    const hide = v => page.evaluate(x => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => x }); document.dispatchEvent(new Event('visibilitychange')); }, v);
+    const tick = api.posts; for (let i = 0; i < 100 && api.posts === tick; i++) await page.waitForTimeout(50);   // align just after an interval flush (tests: every 3 s)
+    const posts0 = api.posts; await page.evaluate(() => DF.sync.append({ type: 'note', lead_id: DF.sync.all()[0].lead_id, campaign: 'Fidium', text: 'battery test' }));
+    const batched = await page.evaluate(() => new Promise(r => setTimeout(() => r(DF.sync.queueSize()), 1200)));
+    await hide('hidden'); const paused = !(await page.evaluate(() => DF.tools.following)); await page.waitForFunction(() => DF.sync.queueSize() === 0, null, { timeout: 8000 });
+    await hide('visible'); const resumed = await page.evaluate(() => DF.tools.following); await page.evaluate(() => { delete document.visibilityState; DF.tools.follow(false); });
+    ok(batched >= 1 && paused && resumed && api.posts > posts0, 'battery: taps queue (no per-tap upload), screen-off flushes + pauses GPS, screen-on resumes GPS', { batched, paused, resumed });
     // ---- Admin: CSV importer ----
     ok(await page.isVisible('#tab-admin'), 'Admin tab visible to the Owner');
     await page.click('.tab[data-tab=admin]');
@@ -152,11 +164,17 @@ const guardrails = () => require('./scan_secrets_csp.js').scan(ok);
     ok(!errors.length && !csp.length, 'no page errors, zero CSP violations (owner run)', { errors: errors.slice(0, 3), csp: csp.slice(0, 3) });
     await context.close();
 
-    console.log('Agent on Pixel 7 (fresh device, roster sign-in)');
+    console.log('Agent on Pixel 7 (fresh device: Rep ID + PIN, server-checked)');
     const r = await newPage(L.browser, L.base, { device: 'Pixel 7' });
-    await r.page.waitForSelector('#modal-signin.open'); await r.page.selectOption('#signin-name', AGENT_A); await r.page.click('#signin-form button');
+    await r.page.waitForSelector('#modal-signin.open');
+    const fresh = await r.page.evaluate(() => ({ opts: Array.from(DF.$$('#signin-name option')).map(o => o.value).join(), idRow: !DF.$('#signin-id-row').hidden }));
+    await r.page.fill('#signin-id', AGENT_A); await r.page.fill('#signin-pin', '0000'); await r.page.click('#signin-form button');
+    await r.page.waitForFunction(() => /Wrong Rep ID or PIN/.test(DF.$('#signin-err').textContent));
+    await r.page.fill('#signin-pin', '1357'); await r.page.click('#signin-form button');
     await ready(r.page);
-    ok(!(await r.page.isVisible('#tab-admin')) && await r.page.evaluate(() => DF.auth.role === 'Agent'), 'roster sign-in as Agent; Admin hidden');
+    ok(fresh.opts === '__id' && fresh.idRow && await r.page.evaluate(() => DF.auth.id === 'agent-1' && !!(DF.store.get('session') || {}).token && !!DF.roster.get('agent-1').pin),
+      'fresh phone: no placeholder names to pick; Rep ID + PIN checked by the Sync API (wrong PIN refused) → session', fresh);
+    ok(!(await r.page.isVisible('#tab-admin')) && await r.page.evaluate(() => DF.auth.role === 'Agent'), 'server sign-in as Agent; Admin hidden');
     ok(await r.page.evaluate(async () => { DF.showTab('admin'); return DF.currentTab === 'map' && (await DF.imports.preview('address,lat,lng\n1 X,43,-70', 'x.csv')) === null; }), 'Agent cannot open Admin or import (UI gate; API re-checks)');
     const rid = await r.page.evaluate(() => DF.sync.all().find(x => DF.map.visible(x)).lead_id); await tap(r.page, rid, 'NH1');
     ok(await r.page.evaluate(() => DF.lastFlipMs) < 30, 'Android: flip < 30 ms');

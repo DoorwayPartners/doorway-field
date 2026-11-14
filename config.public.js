@@ -5,14 +5,14 @@ window.DF_CONFIG = (function () {
   const ENV_KEYS = ['API_URL', 'ORG_ID', 'BASEMAP', 'IMAGERY'], src = window.DF_ENV || {}, env = {};
   ENV_KEYS.forEach(k => { if (typeof src[k] === 'string') env[k] = src[k]; });   // whitelist: config.env.js can never inject a roster
   return Object.assign({
-  VERSION: '2.4.0',
+  VERSION: '2.4.2',
   ORG_ID: 'doorway',
   API_URL: '',                 // stays blank here: the live Sync URL lives in config.env.js. Admin › Sync Outbox can also set one per device
   FIXTURE_URL: '',             // tests/dev only
   BASEMAP: 'google',           // 'google' (Hybrid / Street / Satellite) | 'esri' (Esri imagery + OpenFreeMap). Google auto-falls back to Esri
   IMAGERY: 'esri',             // fallback imagery: 'esri' | 'usgs'
   DEFAULT_MODE: 'hybrid',
-  FLUSH_EVERY_MS: 60000,
+  FLUSH_EVERY_MS: 120000,      // batched background sync (also on screen-off / app-hide and the manual Sync button)
   UNDO_MS: 5000,
   CAMPAIGNS: ['Fidium', 'AT&T Fiber', 'Brightspeed', 'Frontier'],
   DEFAULT_CAMPAIGN: 'Fidium',  // legacy v1 leads + rows imported without a campaign

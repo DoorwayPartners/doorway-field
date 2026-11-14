@@ -80,7 +80,7 @@
     return true;
   }
   DF.setUser = setUser;
-  DF.signOut = () => { DF.store.set('user', null); location.reload(); };
+  DF.signOut = () => { DF.store.set('user', null); DF.store.set('session', null); location.reload(); };
   // ---- invite links (Admin › Roster › Copy Invite Link) = ?token=<128-bit random>. No role, name or id in the URL. The phone hashes the token
   // (SHA-256) and resolves it against the authorized roster: this device's roster first, then the private Sync endpoint (action redeem_invite).
   // The role always comes from that roster, never from the URL, and a link can never sign anyone in as Owner.
@@ -92,11 +92,12 @@
     try {
       const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'redeem_invite', token_hash: h, org_id: DF.cfg.ORG_ID }) });
       const j = await res.json(), p = j && j.ok && j.rep;
-      if (!p || !/^[a-z0-9-]{1,40}$/.test(p.id)) return null;
-      const rep = { id: p.id, name: String(p.name || p.id).slice(0, 40), role: p.role === 'Manager' ? 'Manager' : 'Agent', team: String(p.team || '').slice(0, 40),
-        campaigns: Array.isArray(p.campaigns) && p.campaigns.length ? p.campaigns.map(String) : [DF.cfg.DEFAULT_CAMPAIGN], color: /^#[0-9a-f]{6}$/i.test(p.color) ? p.color : '#00a3a3' };
-      if (/^[0-9a-f]{16}$/.test(p.pin || '')) rep.pin = p.pin;
+      if (!p || !/^[a-z0-9-]{1,40}$/.test(p.id || p.repId || '')) return null;
+      const rep = { id: p.id || p.repId, name: String(p.name || p.id).slice(0, 40), role: p.role === 'Manager' ? 'Manager' : 'Agent', team: String(p.team || '').slice(0, 40),
+        campaigns: Array.isArray(p.campaigns || p.campaignAccess) && (p.campaigns || p.campaignAccess).length ? (p.campaigns || p.campaignAccess).map(String) : [DF.cfg.DEFAULT_CAMPAIGN], color: /^#[0-9a-f]{6}$/i.test(p.color) ? p.color : '#00a3a3' };
+      if (/^[0-9a-f]{16}$/.test(p.pin || p.pinHash || '')) rep.pin = p.pin || p.pinHash;
       await DF.roster.save(DF.roster.all().filter(x => x.id !== rep.id).concat([rep]));
+      DF.setSession(j);
       return rep;
     } catch (e) { return null; }
   }
@@ -104,7 +105,7 @@
     const q = new URLSearchParams(location.search), token = q.get('token');
     if (!token && !q.get('invite')) return null;
     history.replaceState(null, '', location.pathname + location.hash);          // the link is used once; nothing left in the address bar
-    DF.inviteMsg = 'Invite not verified (expired, used, or offline). Ask your manager for a new link, or pick your name.';
+    DF.inviteMsg = 'Invite not verified (expired, used, or offline). Ask your manager for a new link, or sign in with your Rep ID + PIN.';
     if (!token) { DF.inviteMsg = 'Old-style invite links no longer work. Ask your manager for a new link.'; return null; }
     if (!/^[A-Za-z0-9_-]{20,64}$/.test(token) || !(window.crypto && crypto.subtle)) return null;
     const h = await DF.sha256(token), now = Date.now();
@@ -113,32 +114,62 @@
     if (r) DF.inviteMsg = '';
     return r || null;
   }
+  // ---- server PIN login (Rep ID + PIN → session). The PIN never leaves the phone: only DF.hash(repId:pin) is sent. ----
+  const session = () => (DF.store.get('session', null) || {}).token || '';
+  DF.setSession = j => { if (j && j.session) DF.store.set('session', { token: j.session, exp: j.session_exp || 0 }); };
+  async function serverLogin(id, pin) {
+    const url = DF.sync.syncUrl(); if (!url) return { ok: false, error: 'offline' };
+    try {
+      const ph = DF.hash(id + ':' + pin), res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'pin_login', rep_id: id, pin_hash: ph, org_id: DF.cfg.ORG_ID }) });
+      const j = await res.json(), p = j && j.ok && j.rep; if (!p) return { ok: false, error: (j && j.error) || 'bad_pin' };
+      const rep = { id: p.id || p.repId, name: String(p.name || id).slice(0, 40), role: ['Owner', 'Manager'].includes(p.role) ? p.role : 'Agent', team: p.team || '', pin: ph,
+        campaigns: Array.isArray(p.campaigns || p.campaignAccess) ? (p.campaigns || p.campaignAccess) : [], color: /^#[0-9a-f]{6}$/i.test(p.color || '') ? p.color : '#00a3a3' };
+      await DF.roster.save(DF.roster.all().filter(x => x.id !== rep.id).concat([Object.assign({}, DF.roster.get(rep.id) || {}, rep)]));
+      DF.setSession(j);
+      if (rep.role === 'Owner') DF.sync.append({ type: 'roster', roster: DF.roster.all() });   // Owner's first server login uploads the device roster once
+      return { ok: true, rep };
+    } catch (e) { return { ok: false, error: 'offline' }; }
+  }
+  // ---- sign-in (v2.4.1 auth lock): a new phone needs an invite token OR Rep ID + PIN. Only reps whose PIN is on this phone (and the invited rep) are
+  // listed; nobody can pick a placeholder name without a PIN. A rep with no PIN yet (fresh invite) must set one. ----
   function signIn(inv) {
     return new Promise(resolve => {
       const saved = DF.store.get('user', null);
-      if (!inv && !DF.inviteMsg && saved && saved.id && setUser(saved.id)) return resolve();
-      const sel = DF.$('#signin-name');
-      sel.innerHTML = ['Owner', 'Manager', 'Agent'].map(role => '<optgroup label="' + role + 's">' + DF.roster.all().filter(r => r.role === role)
-        .map(r => '<option value="' + DF.esc(r.id) + '">' + DF.esc(r.name) + '</option>').join('') + '</optgroup>').join('');
+      if (!inv && !DF.inviteMsg && saved && saved.id && setUser(saved.id)) return resolve();      // cached session on this phone
+      const sel = DF.$('#signin-name'), online = !!DF.sync.syncUrl(), err = m => { DF.$('#signin-err').textContent = m; };
+      const listed = DF.roster.all().filter(r => r.pin || (inv && r.id === inv.id));
+      sel.innerHTML = listed.map(r => '<option value="' + DF.esc(r.id) + '">' + DF.esc(r.name) + '</option>').join('') + (online ? '<option value="__id">Other rep: enter Rep ID</option>' : '');
       if (inv) { sel.value = inv.id; DF.$('#signin-title').textContent = 'Welcome, ' + inv.name.split(' ')[0]; }
-      DF.$('#signin-err').textContent = DF.inviteMsg || '';
-      const showPin = () => { const r = DF.roster.get(sel.value), setNew = !!(inv && r && r.id === inv.id && !r.pin);
-        DF.$('#signin-pin-row').hidden = !(r && (r.pin || setNew)); DF.$('#signin-pin-label').textContent = setNew ? 'Set a PIN (optional, 4-8 digits)' : 'PIN'; };
+      err(DF.inviteMsg || (!listed.length && !online ? 'This phone is not set up yet: open your invite link.' : ''));
+      const showPin = () => { const other = sel.value === '__id', r = other ? null : DF.roster.get(sel.value);
+        DF.$('#signin-id-row').hidden = !other; DF.$('#signin-pin-row').hidden = !(other || r); DF.$('#signin-pin-label').textContent = r && !r.pin ? 'Set your PIN (4-8 digits)' : 'PIN'; };
       sel.onchange = showPin; showPin();
       DF.openModal('modal-signin');
-      DF.$('#signin-form').onsubmit = e => {
+      const done = (id, after) => { DF.closeModal('modal-signin'); setUser(id); if (after) after(); resolve(); };
+      DF.$('#signin-form').onsubmit = async e => {
         e.preventDefault();
-        const r = DF.roster.get(sel.value);
         const pin = DF.$('#signin-pin').value.trim();
-        if (r.pin && DF.hash(r.id + ':' + pin) !== r.pin) { DF.$('#signin-err').textContent = 'Wrong PIN'; return; }
-        if (!r.pin && inv && r.id === inv.id && pin) {
-          if (!/^\d{4,8}$/.test(pin)) { DF.$('#signin-err').textContent = 'PIN = 4-8 digits (or leave it blank)'; return; }
-          DF.roster.save(DF.roster.all().map(x => x.id === r.id ? Object.assign({}, x, { pin: DF.hash(r.id + ':' + pin) }) : x));
+        if (sel.value === '__id') {
+          const id = DF.$('#signin-id').value.trim().toLowerCase();
+          if (!/^[a-z0-9-]{1,40}$/.test(id) || !/^\d{4,8}$/.test(pin)) return err('Enter your Rep ID and 4-8 digit PIN');
+          const res = await serverLogin(id, pin);
+          if (!res.ok) return err(res.error === 'locked' ? 'Too many tries: wait 15 minutes' : res.error === 'offline' ? 'No connection: try again' : 'Wrong Rep ID or PIN');
+          return done(res.rep.id);
         }
-        DF.closeModal('modal-signin'); setUser(r.id); resolve();
+        const r = DF.roster.get(sel.value); if (!r) return err('Pick your name');
+        if (r.pin) {
+          if (DF.hash(r.id + ':' + pin) !== r.pin) return err('Wrong PIN');
+          return done(r.id, () => { if (online && !session()) serverLogin(r.id, pin); });   // get a sync session in the background
+        }
+        if (!/^\d{4,8}$/.test(pin)) return err('Set a 4-8 digit PIN');                       // invited rep without a PIN: one is required now
+        const ph = DF.hash(r.id + ':' + pin);
+        await DF.roster.save(DF.roster.all().map(x => x.id === r.id ? Object.assign({}, x, { pin: ph }) : x));
+        done(r.id, () => { if (online) DF.sync.append({ type: 'pin_set', pin_hash: ph }); });
       };
     });
   }
+  let authNagged = false;
+  DF.bus.on('sync:auth', () => { if (authNagged) return; authNagged = true; DF.toast('Sync paused: sign in again with your PIN', 'Sign in', DF.signOut, 12000); });
 
   // ---- 4-tab nav ----
   DF.showTab = function (name) {
