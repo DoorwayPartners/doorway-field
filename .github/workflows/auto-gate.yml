@@ -1,0 +1,34 @@
+# Doorway Field auto-gate: runs the secret/CSP scan + both golden fixture suites on every push / PR to main.
+# $0: GitHub Actions minutes are free for public repositories. This is a check (red ✗ / green ✓ on the commit);
+# the real gate is still Kim's field_gate.sh before every publish.
+name: Doorway Field auto-gate
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: auto-gate-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FIELD_PUBLISHED: '1'   # published repo: app files at the root, config.js may carry the real Sync URL
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install (pinned maplibre-gl + playwright from package.json)
+        run: npm install --no-audit --no-fund
+      - name: Secret + CSP scan
+        run: node tests/scan_secrets_csp.js
+      - name: Browser for golden tests
+        run: npx playwright install --with-deps chromium
+      - name: Golden fixture suites (core + v2)
+        run: node tests/test_doorway_field.js && node tests/test_field_v2.js

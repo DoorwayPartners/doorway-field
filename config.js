@@ -1,24 +1,31 @@
-// Doorway Field v1.1.1 — PUBLISH config (config.publish.js -> Pages repo config.js; never in Drive). Owner only; REPS added later. Was: PLACEHOLDERS ONLY: no secrets, no Drive/Sheet/Script IDs in source.
-// Kim fills the blanks at publish time from the deploy env (see MANIFEST.json "config_fill"). Public tile URLs only.
+// Doorway Field v2.0 — page config. No secrets, no Drive/Sheet/Script IDs, no emails in source. Public tile URLs only.
+// Everything here is a default: the owner edits roster, campaigns and pin inventory in Admin (saved on the device until the API ships).
 window.DF_CONFIG = Object.assign({
-  VERSION: '1.1.1',
+  VERSION: '2.0.1',
   ORG_ID: 'doorway',
-  OWNER_DOMAIN: 'doorwaypartners.com',
-  OWNER_EMAILS: ['cristian@doorwaypartners.com'],            // fill at publish: owner allow-list (UI gate only; the API re-checks every owner action)
-  API_URL: '',                 // fill at publish: Doorway Field API web-app URL. Blank = local-only (offline queue keeps everything)
-  GOOGLE_CLIENT_ID: '',        // fill at publish: OAuth web client for Google sign-in. Blank = dev email sign-in
-  REPS: [],                    // [{ email, name }] shown in turf assignment; the API list wins when connected
-  FIXTURE_URL: '',             // tests/dev only: JSON fixture loaded into an empty device
-  IMAGERY: 'esri',             // 'esri' (sharper; terms check before live) | 'usgs' (free US gov NAIP, ~1 m)
-  DEFAULT_MODE: 'hybrid',      // street | hybrid | satellite
+  API_URL: '',                 // default Sync URL (Apps Script / Supabase function). Blank = local-only; Admin › Sync Outbox can set it
+  FIXTURE_URL: '',             // tests/dev only
+  IMAGERY: 'esri',             // 'esri' | 'usgs'
+  DEFAULT_MODE: 'hybrid',
   FLUSH_EVERY_MS: 60000,
   UNDO_MS: 5000,
-  SOLD_FIELDS: [               // owner sign-off 2026-11-14: exactly these 4
+  CAMPAIGNS: ['Fidium', 'AT&T Fiber', 'Brightspeed', 'Frontier'],
+  DEFAULT_CAMPAIGN: 'Fidium',  // legacy v1 leads + rows imported without a campaign
+  // Public seed only: the Owner + generic sample roles. Real team names / PINs are entered in Admin › Roster (saved in IndexedDB on the
+  // device and synced through the private Sync endpoint), so no rep names or emails ever sit in the public repo.
+  ROSTER: [
+    { id: 'cristian-coy', name: 'Cristian Coy', role: 'Owner', team: 'Leadership', campaigns: ['*'], color: '#e31b23' },
+    { id: 'manager-1', name: 'Manager 1', role: 'Manager', team: 'Team 1', campaigns: ['*'], color: '#2f80ed' },
+    { id: 'agent-1', name: 'Agent 1', role: 'Agent', team: 'Team 1', campaigns: ['Fidium'], color: '#00a3a3' }
+  ],
+  SOLD_FIELDS: [
     { key: 'customer_name', label: 'Customer Name', type: 'text', required: true },
     { key: 'speed_tier', label: 'Speed Tier', type: 'text', required: true },
     { key: 'phone_email', label: 'Phone / Email', type: 'text', required: true },
     { key: 'install_date', label: 'Install Date', type: 'date', required: false }
   ],
+  ROUTE_MAX_STOPS: 23,
+  GEOCODE_URL: 'https://nominatim.openstreetmap.org/reverse',   // free OSM reverse geocoder: light use only (1 request/s, cached)
   TILES: {
     esri: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     esriAttr: 'Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community',

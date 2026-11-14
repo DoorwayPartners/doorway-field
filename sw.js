@@ -1,10 +1,11 @@
-// Doorway Field v1.0 — service worker: app shell offline (cache-first), viewed map tiles cached at runtime (capped),
+// Doorway Field v2.0 — service worker: app shell offline (cache-first), viewed map tiles cached at runtime (capped),
 // API calls never cached. Background Sync (Android/Chrome only) just asks the open page to flush; iPhone flushes on open.
-const SHELL = 'df-shell-1.1.1';
+const SHELL = 'df-shell-2.0.1';
 const TILES = 'df-tiles-1';
 const TILE_CAP = 1500;   // viewed tiles only; no bulk pre-download (OpenFreeMap / Esri terms)
-const ASSETS = ['./', 'index.html', 'styles.css', 'config.js', 'app.js', 'OfflineSync.js', 'MapEngine.js', 'BottomCard.js', 'TurfAdmin.js', 'LeadImport.js',
-  'manifest.webmanifest', 'icon.svg', 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js', 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css'];
+const ASSETS = ['./', 'index.html', 'styles.css', 'styles-v2.css', 'config.js', 'app.js', 'OfflineSync.js', 'MapEngine.js', 'MapTools.js', 'BottomCard.js', 'FilterDrawer.js',
+  'LassoSheet.js', 'ListView.js', 'StatsView.js', 'LeadImport.js', 'AdminPanel.js', 'manifest.webmanifest', 'icon.svg',
+  'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js', 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css'];
 const TILE_HOSTS = ['server.arcgisonline.com', 'basemap.nationalmap.gov', 'tiles.openfreemap.org'];
 
 self.addEventListener('install', e => { e.waitUntil(caches.open(SHELL).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
