@@ -29,6 +29,7 @@
   <script src="AdminPanel.js" defer></script>
   <script src="PinStudio.js" defer></script>
   <script src="TurfZones.js" defer></script>
+  <script src="Pwa.js" defer></script>
 </head>
 <body>
 <main id="app">
@@ -40,6 +41,7 @@
       <span id="sync-state" class="sync">local</span><span id="sync-queue" class="queue"></span><button type="button" id="me-name" class="me"></button>
     </header>
     <div id="ring-legend" class="ring-legend" hidden></div>
+    <div id="install-banner" class="install-banner" hidden><span id="install-text">Install the Doorway Field app</span><button type="button" class="btn primary" id="install-go">Install</button><button type="button" class="x" id="install-x" aria-label="Dismiss install banner">×</button></div>
     <div class="pills left">
       <button type="button" class="pill" id="pill-filter" aria-label="Filters">⚟<b id="filter-badge" class="badge" hidden></b></button>
       <button type="button" class="pill" id="pill-search" aria-label="Search">⌕</button>
@@ -48,7 +50,7 @@
       <button type="button" class="pill" id="pill-stamp" aria-label="Rapid-Stamp mode">⚡</button>
     </div>
     <div class="pills right">
-      <button type="button" class="pill" id="pill-layers" aria-label="Map layers">◫</button>
+      <button type="button" class="pill mode-pill" id="pill-layers" aria-label="Map layers">Hybrid ▾</button>
       <button type="button" class="pill" id="pill-drop" aria-label="Drop pin">⊕</button>
       <button type="button" class="pill" id="pill-compass" aria-label="Compass: reset north">N</button>
       <button type="button" class="pill gps" id="pill-gps" aria-label="Recenter and follow me">◎</button>
@@ -72,6 +74,7 @@
       <p id="card-meta" class="muted"></p>
       <p id="card-appt" class="appt"></p>
       <p id="card-intel" class="intel"></p>
+      <p id="card-last" class="muted last"></p>
       <div id="lead-menu" class="lead-menu" role="toolbar" aria-label="Lead Menu"></div>
       <div class="card-actions"><button type="button" class="btn" id="card-appt-btn">Appointment</button><button type="button" class="btn" id="card-cb-btn">Callback</button><button type="button" class="btn" id="card-forms-btn">Forms</button><a class="btn" id="card-dir" target="_blank" rel="noopener" href="#">Directions</a></div>
       <form id="card-note-form" class="note-bar"><label for="card-note">NOTES</label><input id="card-note" maxlength="500" placeholder="Add a note..."><button class="btn" type="submit">Save</button></form>
@@ -120,6 +123,7 @@
       <div class="filters"><input id="camp-name" placeholder="New campaign (e.g. Ziply)" maxlength="40"><button type="button" class="btn primary" id="camp-add">+ Add Campaign</button></div>
       <h3>Roster <button type="button" class="btn" id="roster-add">+ Add person</button></h3>
       <div class="pv-scroll"><table class="grid"><thead><tr><th>Name</th><th>Role</th><th>Team</th><th>Campaigns</th><th>PIN</th><th></th></tr></thead><tbody id="roster-body"></tbody></table></div>
+      <div id="invite-row" class="filters" hidden><input id="invite-out" readonly aria-label="Invite link"></div>
       <form id="roster-form" class="preview" hidden>
         <input id="rf-id" type="hidden"><label class="inline">Name <input id="rf-name" required maxlength="40"></label>
         <label class="inline">Role <select id="rf-role"><option>Owner</option><option>Manager</option><option selected>Agent</option></select></label>
@@ -181,13 +185,13 @@
 
 <div id="details" class="modal full" role="dialog" aria-label="Details"><div class="sheet">
   <div class="sheet-head"><h2 id="details-title">Details</h2><button type="button" class="x" data-close="details" aria-label="Close">×</button></div>
-  <div class="dtabs"><button type="button" class="dtab active" data-dtab="info">Info</button><button type="button" class="dtab" data-dtab="notes">Notes</button><button type="button" class="dtab" data-dtab="activity">Activity</button></div>
+  <div class="dtabs"><button type="button" class="dtab active" data-dtab="info">Info</button><button type="button" class="dtab" data-dtab="history">Notes &amp; History</button></div>
   <div id="details-body" class="details-body"></div>
 </div></div>
 
-<div id="modal-signin" class="modal" role="dialog" aria-label="Sign in"><form id="signin-form" class="sheet"><div class="sheet-head"><h2>Who's knocking?</h2></div>
+<div id="modal-signin" class="modal" role="dialog" aria-label="Sign in"><form id="signin-form" class="sheet"><div class="sheet-head"><h2 id="signin-title">Who's knocking?</h2></div>
   <label><span>Your name</span><select id="signin-name"></select></label>
-  <label id="signin-pin-row" hidden><span>PIN</span><input id="signin-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
+  <label id="signin-pin-row" hidden><span id="signin-pin-label">PIN</span><input id="signin-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
   <p id="signin-err" class="rejects"></p><button class="btn primary wide" type="submit">Continue</button></form></div>
 
 <div id="toast" class="toast" role="status"><span id="toast-msg"></span><button type="button" id="toast-action" hidden></button></div>

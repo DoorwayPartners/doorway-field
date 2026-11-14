@@ -20,7 +20,7 @@
     '⌛': { name: 'Hourglass', d: 'M7 3.5h10 M7 20.5h10 M8 3.5c0 4 8 5 8 8.5s-8 4.5-8 8.5 M16 3.5c0 4-8 5-8 8.5s8 4.5 8 8.5' }
   };
   const SWATCHES = ['#58C322', '#1e8e3e', '#7cc4f5', '#3a8fe0', '#1c4f9c', '#2350d8', '#00a3a3', '#ff5fa2', '#9b51e0', '#f2b705', '#f2994a', '#e53935', '#a68a64', '#1d1d1f'];
-  const PIN = 34, RING = 3.5, DISC = 27, GLYPH = 17, PAD = 6, BOX = PIN + PAD * 2;   // css px; drawn at 2x
+  const PIN = 32, RING = 2, DISC = 25, HAIR = 1, GLYPH = 15, PAD = 6, BOX = PIN + PAD * 2;   // css px; drawn at 2x (v2.3: 25 disc + 2 ring + 1 hairline)
   const paths = {};
   const path = ch => paths[ch] || (paths[ch] = new Path2D(ICONS[ch].d));
 
@@ -33,13 +33,15 @@
       x.fillStyle = color; x.font = '700 ' + (String(ch).length > 1 ? 12 : 15) + 'px Arial, Helvetica, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(String(ch || ''), c, c + 1);
     }
   }
-  // 34 px dual-ring pin: 3.5 px outer rep ring + 27 px status disc + 17 px white icon + 0 2px 6px rgba(0,0,0,.45) shadow.
+  // 32 px dual-ring pin (v2.3): 25 px status disc + 2 px rep ring + 1 px rgba(15,23,42,.5) hairline, so neighbouring houses never merge into a white chain.
   // Ring statuses (Existing Customer): white centre + inner status-colour ring + status-colour icon.
   function pinCanvas(s, ring) {
     const cv = document.createElement('canvas'); cv.width = cv.height = BOX * 2;
     const x = cv.getContext('2d'), c = BOX / 2; x.scale(2, 2);
-    x.save(); x.shadowColor = 'rgba(0,0,0,0.45)'; x.shadowBlur = 12; x.shadowOffsetY = 4;          // shadow units are device px (2x)
-    x.beginPath(); x.arc(c, c, PIN / 2, 0, Math.PI * 2); x.fillStyle = ring || '#ffffff'; x.fill(); x.restore();
+    const rOut = DISC / 2 + RING + HAIR;
+    x.save(); x.shadowColor = 'rgba(0,0,0,0.35)'; x.shadowBlur = 8; x.shadowOffsetY = 3;           // shadow units are device px (2x)
+    x.beginPath(); x.arc(c, c, rOut, 0, Math.PI * 2); x.fillStyle = 'rgba(15,23,42,0.5)'; x.fill(); x.restore();
+    x.beginPath(); x.arc(c, c, rOut - HAIR, 0, Math.PI * 2); x.fillStyle = ring || '#ffffff'; x.fill();
     x.beginPath(); x.arc(c, c, DISC / 2, 0, Math.PI * 2);
     if (s.ring) { x.fillStyle = '#ffffff'; x.fill(); x.beginPath(); x.arc(c, c, DISC / 2 - 1.5, 0, Math.PI * 2); x.lineWidth = 3; x.strokeStyle = s.color; x.stroke(); glyph(x, s.icon, c, s.color); }
     else { x.fillStyle = s.color; x.fill(); glyph(x, s.icon, c, '#ffffff'); }

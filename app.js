@@ -81,20 +81,43 @@
   }
   DF.setUser = setUser;
   DF.signOut = () => { DF.store.set('user', null); location.reload(); };
-  function signIn() {
+  // ---- invite link (Admin › Roster › Copy Invite Link): adds the rep to this phone, preselects them, offers an optional PIN ----
+  const PAL = ['#00a3a3', '#c9a227', '#9b51e0', '#f2994a', '#2f80ed', '#ff5fa2', '#1e8e3e'];
+  async function takeInvite() {
+    const q = new URLSearchParams(location.search), id = String(q.get('invite') || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40);
+    if (!id) return null;
+    history.replaceState(null, '', location.pathname + location.hash);          // the link sets up once; no params left in the address bar
+    let r = DF.roster.get(id);
+    if (!r) {
+      const role = q.get('role') === 'Manager' ? 'Manager' : 'Agent';           // a link can never create an Owner
+      const camp = String(q.get('camp') || '').split(',').map(s => s.trim()).filter(c => DF.campaigns().includes(c));
+      r = { id, name: String(q.get('name') || id).trim().slice(0, 40), role, team: '', campaigns: role === 'Manager' ? ['*'] : (camp.length ? camp : [DF.cfg.DEFAULT_CAMPAIGN]),
+        color: PAL[parseInt(DF.hash(id).slice(0, 4), 16) % PAL.length] };
+      await DF.roster.save(DF.roster.all().concat([r]));
+    }
+    return r;
+  }
+  function signIn(inv) {
     return new Promise(resolve => {
       const saved = DF.store.get('user', null);
-      if (saved && saved.id && setUser(saved.id)) return resolve();
+      if (!inv && saved && saved.id && setUser(saved.id)) return resolve();
       const sel = DF.$('#signin-name');
       sel.innerHTML = ['Owner', 'Manager', 'Agent'].map(role => '<optgroup label="' + role + 's">' + DF.roster.all().filter(r => r.role === role)
         .map(r => '<option value="' + DF.esc(r.id) + '">' + DF.esc(r.name) + '</option>').join('') + '</optgroup>').join('');
-      const showPin = () => { const r = DF.roster.get(sel.value); DF.$('#signin-pin-row').hidden = !(r && r.pin); };
+      if (inv) { sel.value = inv.id; DF.$('#signin-title').textContent = 'Welcome, ' + inv.name.split(' ')[0]; }
+      const showPin = () => { const r = DF.roster.get(sel.value), setNew = !!(inv && r && r.id === inv.id && !r.pin);
+        DF.$('#signin-pin-row').hidden = !(r && (r.pin || setNew)); DF.$('#signin-pin-label').textContent = setNew ? 'Set a PIN (optional, 4-8 digits)' : 'PIN'; };
       sel.onchange = showPin; showPin();
       DF.openModal('modal-signin');
       DF.$('#signin-form').onsubmit = e => {
         e.preventDefault();
         const r = DF.roster.get(sel.value);
-        if (r.pin && DF.hash(r.id + ':' + DF.$('#signin-pin').value) !== r.pin) { DF.$('#signin-err').textContent = 'Wrong PIN'; return; }
+        const pin = DF.$('#signin-pin').value.trim();
+        if (r.pin && DF.hash(r.id + ':' + pin) !== r.pin) { DF.$('#signin-err').textContent = 'Wrong PIN'; return; }
+        if (!r.pin && inv && r.id === inv.id && pin) {
+          if (!/^\d{4,8}$/.test(pin)) { DF.$('#signin-err').textContent = 'PIN = 4-8 digits (or leave it blank)'; return; }
+          DF.roster.save(DF.roster.all().map(x => x.id === r.id ? Object.assign({}, x, { pin: DF.hash(r.id + ':' + pin) }) : x));
+        }
         DF.closeModal('modal-signin'); setUser(r.id); resolve();
       };
     });
@@ -120,14 +143,14 @@
       try { const fx = await (await fetch(DF.cfg.FIXTURE_URL)).json(); await DF.sync.importRows(fx.pins || fx, { source: 'fixture', silent: true }); }
       catch (e) { console.error('[DF] fixture', e); }
     }
-    await signIn();
-    ['card', 'filters', 'list', 'stats', 'lasso', 'imports', 'admin', 'pins', 'turf'].forEach(m => DF[m] && DF[m].init && DF[m].init());
+    await signIn(await takeInvite());
+    ['card', 'filters', 'list', 'stats', 'lasso', 'imports', 'admin', 'pins', 'turf', 'pwa'].forEach(m => DF[m] && DF[m].init && DF[m].init());
     DF.map.init('map');
     DF.tools.init();
     DF.sync.startAuto();
     DF.showTab('map');
     if ('serviceWorker' in navigator && DF.cfg.SW !== false) {
-      navigator.serviceWorker.register('sw.js').catch(() => {});
+      navigator.serviceWorker.register('sw.js').then(reg => DF.pwa && DF.pwa.watch(reg)).catch(() => {});
       navigator.serviceWorker.addEventListener('message', e => { if (e.data === 'df-flush') DF.sync.flush(); });
     }
     DF.ready = true;

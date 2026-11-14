@@ -29,10 +29,10 @@ const lines = t => t.trimEnd().split('\r\n');
       return { nar: by(a.find(r => r.assigned_rep_email === 'agent-1').lead_id), jsh: by(a.find(r => r.assigned_rep_email === 'agent-2').lead_id), legend: DF.$('#ring-legend').textContent, hidden: DF.$('#ring-legend').hidden }; });
     ok(rings.nar === '#00a3a3' && rings.jsh === '#c9a227' && !rings.hidden && /Agent 1 25/.test(rings.legend) && /Agent 2 25/.test(rings.legend), 'Owner view: outer ring = rep colour + rep-ring legend pill', rings);
     const img = await page.evaluate(() => { const px = (s, ring, x, y) => { const d = DF.pins.pinImage(DF.sync.BY_CODE[s], ring); return Array.from(d.data.slice((y * d.width + x) * 4, (y * d.width + x) * 4 + 4)); };
-      return { w: DF.pins.pinImage(DF.sync.BY_CODE.NEW, '#00a3a3').width, cstCenter: px('CST', '#ffffff', 32, 32), cstRing: px('CST', '#ffffff', 46, 22), newCenter: px('NEW', '#00a3a3', 26, 46),
-        rep: px('NEW', '#00a3a3', 46, 15), icon: px('SOLD', '#00a3a3', 46, 40), shadow: px('NEW', '#00a3a3', 46, 84) }; });
+      return { w: DF.pins.pinImage(DF.sync.BY_CODE.NEW, '#00a3a3').width, cstCenter: px('CST', '#ffffff', 32, 32), cstRing: px('CST', '#ffffff', 44, 22), newCenter: px('NEW', '#00a3a3', 24, 44), hair: px('NEW', '#ffffff', 44, 14),
+        rep: px('NEW', '#00a3a3', 44, 17), icon: px('SOLD', '#00a3a3', 44, 38), shadow: px('NEW', '#00a3a3', 44, 78) }; });
     ok(img.cstCenter.slice(0, 3).every(v => v > 240) && img.cstRing[2] > 180 && img.cstRing[0] < 80 && img.newCenter[1] > 170 && img.newCenter[2] < 80, 'Existing Customer = white centre + royal-blue ring; New = filled lime disc', img);
-    ok(img.w === 92 && img.rep[1] > 140 && img.rep[0] < 40 && img.icon.slice(0, 3).every(v => v > 200) && img.shadow[3] > 10 && img.shadow[0] < 60, '34 px pin: 3.5 px rep ring + 27 px disc + white icon + drop shadow (2x canvas)', img);
+    ok(img.w === 88 && img.rep[1] > 140 && img.rep[0] < 40 && img.hair.slice(0, 3).every(v => v < 90) && img.hair[3] > 60 && img.icon.slice(0, 3).every(v => v > 200) && img.shadow[3] > 5 && img.shadow[0] < 60, '32 px pin: 25 px disc + 2 px rep ring + 1 px slate hairline + white icon + shadow (2x canvas)', img);
     const sc = await page.evaluate(() => ['NEW', 'NH1', 'NH2', 'NH3', 'GB', 'P_GB', 'SOLD', 'NI', 'APPT', 'CST'].map(c => DF.sync.BY_CODE[c].color.toUpperCase() + DF.sync.BY_CODE[c].icon).join(' '));
     ok(sc === '#58C322⌖ #7CC4F5? #3A8FE0? #1C4F9C? #FF5FA2↺ #F2B705🔒 #1E8E3E$ #E53935✕ #00A3A3◷ #2350D8✓', 'SalesRabbit status colours + icons (New lime pinpoint … Existing Customer royal-blue check)', sc);
     const stk = await page.evaluate(() => { const o = (id, dy, s) => ({ lead_id: id, lat: 43.44 + dy / 111320, lng: -70.77, status_code: s }), a = DF.map.stacks([o('a', 0, 'NI'), o('b', 5, 'NI'), o('c', 10, 'NEW'), o('d', 200, 'NEW')]),
@@ -57,7 +57,7 @@ const lines = t => t.trimEnd().split('\r\n');
     await page.click('#ps-icons [data-icon="★"]'); await page.click('#ps-swatches [data-color="#9b51e0"]');
     const ps = await page.evaluate(() => ({ icon: DF.sync.BY_CODE.NH1.icon, color: DF.sync.BY_CODE.NH1.color, icons: DF.$$('#ps-icons button').length, sw: DF.$$('#ps-swatches button').length, prev: DF.$('#ps-preview').naturalWidth }));
     const pv1 = await page.getAttribute('#inv-body tr[data-code=NH1] .pin-pv img', 'src');
-    ok(studio && ps.icon === '★' && ps.color === '#9b51e0' && ps.icons === 13 && ps.sw >= 12 && ps.prev === 92 && pv0 !== pv1, 'Pin editor: tap pin → tap icon / swatch saves instantly; 13-icon grid + palette + live 34 px preview', ps);
+    ok(studio && ps.icon === '★' && ps.color === '#9b51e0' && ps.icons === 13 && ps.sw >= 12 && ps.prev === 88 && pv0 !== pv1, 'Pin editor: tap pin → tap icon / swatch saves instantly; 13-icon grid + palette + live 32 px preview', ps);
     await page.evaluate(async () => { const o = JSON.parse(JSON.stringify(DF.sync.meta('statuses'))); delete o.NH1.icon; delete o.NH1.color; await DF.sync.setMeta('statuses', o); DF.admin.renderInventory(); });
     await page.click('.tab[data-tab=map]');
     const cst = await page.evaluate(() => DF.sync.all().find(r => r.status_code === 'CST').lead_id);
@@ -116,7 +116,7 @@ const lines = t => t.trimEnd().split('\r\n');
     const gl = await page.evaluate(() => DF.sync.all().find(r => r.campaign === 'Fidium' && r.status_code === 'NEW'));
     await context.setGeolocation({ latitude: gl.lat + 0.0001, longitude: gl.lng });
     await tap(page, gl.lead_id, 'NI'); await page.evaluate(() => DF.card.lastGps);
-    await page.click('#card-details'); await page.click('.dtab[data-dtab=activity]');
+    await page.click('#card-details'); await page.click('.dtab[data-dtab=history]');
     const act = await page.textContent('#details-body'), ft = +((act.match(/📍 (\d+) ft from pin/) || [])[1]);
     const fx = await page.evaluate(id => DF.sync.events(id).filter(x => x.type === 'gps_fix').pop(), gl.lead_id);
     ok(ft >= 30 && ft <= 42 && fx && fx.fix === 'fresh' && /Cristian Coy · Fidium/.test(act) && /New → NI/.test(act), 'Activity: who · campaign · when · New → NI · FRESH GPS distance ≈ 36 ft (never a stale cached fix)', { ft, fix: fx && fx.fix, act: act.slice(0, 160) });
@@ -217,6 +217,37 @@ const lines = t => t.trimEnd().split('\r\n');
     const tzAfter = await page.evaluate(() => ({ n: DF.turf.all().length, f: DF.map.instance.getSource('turfs')._data.features.length }));
     ok(tz.row && tz.reps >= 4 && tz2.z === 'Zone Elm North|agent-1|#00a3a3|4' && tz2.f === 1 && tz2.below && tz2.ev && hid === 0 && kept === 1 && tzAfter.n === 1 && tzAfter.f === 1,
       'Lasso › Save as Turf Zone: named rep-colour outline under the pins · outbox event · Filters toggle · survives layer switch + reload (IndexedDB)', { tz, tz2, hid, kept, tzAfter });
+    // ---- v2.3: retina tiles + 32 px pins + lower controls, Notes & History feed, invite links, PWA banner + update toast ----
+    const rt3 = await page.evaluate(() => { const g = DF.map.buildStyle('hybrid').sources.imagery.tiles[0]; DF.map.fallback = true; const e = DF.map.buildStyle('satellite').sources.imagery; DF.map.fallback = false;
+      const st = DF.map.instance.getStyle().sources.imagery.tiles[0], pr = DF.$('.pills.right').getBoundingClientRect(), hdr = DF.$('#campaign-pill').getBoundingClientRect();
+      return { g, live: st, esriSize: e.tileSize, dpr: window.devicePixelRatio, top: pr.top, below: pr.top > hdr.bottom + 20, label: DF.$('#pill-layers').textContent }; });
+    await page.evaluate(() => DF.map.setMode('street')); await page.waitForFunction(() => DF.map.ready && DF.map.mode === 'street'); const lblS = await page.textContent('#pill-layers');
+    await page.evaluate(() => DF.map.setMode('hybrid')); await page.waitForFunction(() => DF.map.ready && DF.map.mode === 'hybrid');
+    ok(/&scale=2$/.test(rt3.g) && /&scale=2$/.test(rt3.live) && rt3.esriSize === (rt3.dpr >= 2 ? 128 : 256) && rt3.top >= 108 && rt3.below && rt3.label === 'Hybrid ▾' && lblS === 'Street ▾',
+      'retina tiles (Google scale=2, Esri 2x density) · right controls at 108 px · layers button reads "Hybrid ▾"', [rt3, lblS]);
+    await tap(page, noteId, 'NH1'); await page.waitForTimeout(300);
+    await page.click('#card-details'); await page.click('.dtab[data-dtab=history]');
+    await page.fill('#d-note', 'gate code 4411'); await page.click('#d-note-form button[type=submit]'); await page.waitForTimeout(150);
+    const hist = await page.evaluate(() => { const li = DF.$$('#details-body .timeline li'); return { n: li.length, first: li[0] && li[0].textContent, all: DF.$('#details-body').textContent,
+      chip: !!DF.$('#details-body .timeline .status-chip.chip-NH1'), note: !!DF.$('#details-body .timeline .note-chip'), form: !!DF.$('#d-note-form') }; });
+    await page.click('[data-close=details]'); await page.evaluate(id => { DF.card.close(); DF.bus.emit('pin:selected', id); }, noteId);
+    const last = await page.textContent('#card-last'); await page.evaluate(() => DF.card.close());
+    ok(hist.form && /gate code 4411/.test(hist.first) && /blue door zebra gate/.test(hist.all) && hist.chip && hist.note && /Cristian Coy/.test(hist.all) && /📍/.test(hist.all) && /gate code 4411/.test(last),
+      'Lead drawer › Notes & History: newest-first notes + status badges + rep + time + GPS ft, Add Note without a status change; card shows the latest', [hist, last]);
+    await page.click('.tab[data-tab=admin]');
+    const noOwnerInv = await page.evaluate(() => !DF.$('#roster-body tr[data-id="cristian-coy"] .r-inv'));
+    await page.click('#roster-body tr[data-id="agent-1"] .r-inv'); await page.waitForTimeout(150);
+    const inv = await page.evaluate(() => { const u = new URL(DF.$('#invite-out').value); return { invite: u.searchParams.get('invite'), role: u.searchParams.get('role'), name: u.searchParams.get('name'), camp: u.searchParams.get('camp'), shown: !DF.$('#invite-row').hidden }; });
+    ok(noOwnerInv && inv.shown && inv.invite === 'agent-1' && inv.role === 'Agent' && inv.name === 'Agent 1' && inv.camp === 'Fidium', 'Admin › Roster › Copy Invite Link: ?invite=<id>&role=<role>&name=<name> (+ campaigns); none for Owners', inv);
+    await page.click('.tab[data-tab=map]');
+    const pw = await page.evaluate(() => { DF.store.set('installDismissed', 0); const ios = DF.pwa.check(), iosTxt = DF.$('#install-text').textContent, goHidden = DF.$('#install-go').hidden;
+      const e = new Event('beforeinstallprompt'); e.prompt = () => { window.__prompted = true; }; e.userChoice = Promise.resolve({ outcome: 'accepted' }); window.dispatchEvent(e);
+      return { ios, iosTxt, goHidden, prompt: !DF.$('#install-banner').hidden && !DF.$('#install-go').hidden, legendHidden: getComputedStyle(DF.$('#ring-legend')).display === 'none' }; });
+    await page.click('#install-go'); await page.waitForTimeout(150);
+    const pw2 = await page.evaluate(() => { const o = { prompted: !!window.__prompted, hidden: DF.$('#install-banner').hidden }; Object.defineProperty(navigator, 'standalone', { value: true, configurable: true });
+      DF.store.set('installDismissed', 0); o.standalone = DF.pwa.check() === false && DF.$('#install-banner').hidden; DF.pwa.updateReady(); o.toast = DF.$('#toast-msg').textContent; o.btn = DF.$('#toast-action').textContent; return o; });
+    ok(pw.ios && /Share/.test(pw.iosTxt) && /Add to Home Screen/.test(pw.iosTxt) && pw.goHidden && pw.prompt && pw.legendHidden && pw2.prompted && pw2.hidden && pw2.standalone && pw2.toast === 'Field Update Ready — Tap to Refresh' && pw2.btn === 'Refresh',
+      'PWA: iOS Share → Add to Home Screen guide · Android Install prompt · hidden in standalone · "Field Update Ready — Tap to Refresh" toast', [pw, pw2]);
     ok(!errors.length && !(await page.evaluate(() => window.__csp.length)), 'no page errors, zero CSP violations (owner v2 run)', errors.slice(0, 3));
     const ext = await page.evaluate(() => JSON.stringify({ roster: DF.roster.all(), campaigns: DF.campaigns() }));
     await context.close();
@@ -234,6 +265,14 @@ const lines = t => t.trimEnd().split('\r\n');
     const fbs = await fb.page.evaluate(() => ({ t: DF.map.instance.getStyle().sources.imagery.tiles[0], pins: !!DF.map.instance.getSource('leads') }));
     ok(/arcgisonline/.test(fbs.t) && fbs.pins, 'Google tiles blocked → automatic Esri imagery fallback with pins re-drawn', fbs);
     await fb.context.close();
+    const iv = await newPage(L.browser, L.base, { path: '?invite=rep-nine&role=Owner&name=Rep%20Nine&camp=AT%26T%20Fiber' });
+    await iv.page.waitForSelector('#modal-signin.open');
+    const ivs = await iv.page.evaluate(() => ({ sel: DF.$('#signin-name').value, title: DF.$('#signin-title').textContent, pinRow: !DF.$('#signin-pin-row').hidden, label: DF.$('#signin-pin-label').textContent, url: location.search }));
+    await iv.page.fill('#signin-pin', '2468'); await iv.page.click('#signin-form button[type=submit]'); await ready(iv.page);
+    const iva = await iv.page.evaluate(() => ({ id: DF.auth.id, role: DF.auth.role, camps: DF.auth.campaigns.join(), pin: DF.roster.get('rep-nine').pin === DF.hash('rep-nine:2468') }));
+    ok(ivs.sel === 'rep-nine' && /Welcome, Rep/.test(ivs.title) && ivs.pinRow && /optional/i.test(ivs.label) && ivs.url === '' && iva.id === 'rep-nine' && iva.role === 'Agent' && iva.camps === 'AT&T Fiber' && iva.pin,
+      'invite link opens set up: rep added (never as Owner), preselected, optional PIN saved, link params cleared', [ivs, iva]);
+    await iv.context.close();
     const j = await newPage(L.browser, L.base, { user: AGENT_B }); await ready(j.page);
     ok((await j.page.$$eval('#campaign-menu button', b => b.map(x => x.textContent))).join() === 'Fidium,AT&T Fiber', 'Agent with 2 campaigns flips between them (no All Campaigns)');
     await j.context.close();

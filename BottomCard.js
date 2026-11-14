@@ -51,6 +51,8 @@
     $('#card-status').className = 'status-chip chip-' + r.status_code;
     $('#card-address').textContent = addr(r) + ', ' + [r.city, r.state, r.zip].filter(Boolean).join(' ');
     $('#card-dir').href = 'https://maps.google.com/?daddr=' + r.lat + ',' + r.lng;                 // 1-tap turn-by-turn in native maps
+    const le = DF.sync.events(r.lead_id).filter(e => e.type === 'note' || e.type === 'status').pop();
+    $('#card-last').textContent = le ? 'Last: ' + (le.type === 'note' ? '📝 ' + le.text : st(le.to).short) + ' · ' + DF.firstName(le.rep) + ' · ' + DF.fmtTime(le.device_ts) : '';
     $('#card-meta').textContent = r.campaign + ' · ' + DF.roster.name(r.assigned_rep_email);
     $('#card-appt').textContent = r.appt_at ? 'Appointment / callback ' + DF.fmtTime(r.appt_at) : '';
     $('#card-intel').textContent = r.turf_intel_note || '';
@@ -96,17 +98,18 @@
   function saveNote(text, id) {
     id = id || current; text = String(text || '').trim().slice(0, 500); if (!text || !id) return;
     DF.sync.mutate(id, { rep_note: text }, 'note', { text });
-    DF.toast('Note saved'); if ($('#details').classList.contains('open')) renderDetails('notes');
+    DF.toast('Note saved'); if ($('#details').classList.contains('open')) renderDetails('history');
   }
 
-  // ---- Lead Detail: Info | Notes | Activity ----
+  // ---- Lead Detail: Info | Notes & History ----
   function describe(e, fixes) {
     const who = DF.roster.name(e.rep), f = fixes[e.event_id];
     const gps = e.type === 'status' ? (f ? (f.gps === 'ok' ? ' · 📍 ' + f.ft + ' ft from pin (±' + f.acc_ft + ' ft' + (f.fix === 'cached' ? ', cached fix ' + f.age_s + ' s old' : '') + ')' : ' · 📍 no GPS fix') : FIELD.includes(e.source) ? ' · 📍 locating…' : ' · ' + (e.source || 'bulk')) : '';
     const what = e.type === 'status' ? st(e.from).short + ' → ' + st(e.to).short : e.type === 'undo' ? 'Undo' + (e.to ? ' → ' + st(e.to).short : '')
       : e.type === 'assign' ? 'Assigned ' + DF.roster.name(e.prev_rep) + ' → ' + DF.roster.name(e.patch.assigned_rep_email) : e.type === 'appt' ? (e.kind === 'callback' ? 'Callback ' : 'Appointment ') + DF.fmtTime(e.patch.appt_at)
       : e.type === 'sold_form' ? 'SOLD order captured' : e.type === 'note' ? 'Note added' : e.type === 'create' ? 'Pin dropped (' + (e.how || 'map') + ')' : e.type === 'delete' ? 'Deleted' : e.type;
-    return '<li><time>' + DF.fmtTime(e.device_ts) + ' · ' + DF.esc(who) + ' · ' + DF.esc(e.campaign || '') + '</time><p>' + DF.esc(what + gps) + '</p></li>';
+    const badge = (e.type === 'status' || e.type === 'undo') && e.to ? '<span class="status-chip chip-' + DF.esc(e.to) + '">' + DF.esc(st(e.to).short) + '</span> ' : e.type === 'note' ? '<span class="status-chip note-chip">Note</span> ' : '';
+    return '<li class="h-' + DF.esc(e.type) + '"><time>' + DF.fmtTime(e.device_ts) + ' · ' + DF.esc(who) + ' · ' + DF.esc(e.campaign || '') + '</time><p>' + badge + DF.esc(e.type === 'note' ? e.text || '' : what + gps) + '</p></li>';
   }
   function renderDetails(tab) {
     const r = DF.sync.get(current); if (!r) return;
@@ -123,14 +126,12 @@
       DF.$$('.status-grid .dispo', body).forEach(b => b.addEventListener('click', () => { flip(b.dataset.code); renderDetails('info'); }));
       $('#d-appt').addEventListener('click', () => openAppt('appointment')); $('#d-cb').addEventListener('click', () => openAppt('callback'));
       const del = $('#d-delete'); if (del) del.addEventListener('click', () => { DF.sync.removeMany([r.lead_id], 'detail'); DF.map.refresh(); DF.closeModal('details'); close(); DF.toast('Lead deleted (kept in history)'); });
-    } else if (tab === 'notes') {
-      const notes = evs.filter(e => e.type === 'note');
-      body.innerHTML = '<form class="note-form" id="d-note-form"><input id="d-note" maxlength="500" placeholder="Add a note..."><button class="btn" type="submit">Save</button></form><ul class="timeline">' +
-        (notes.map(e => '<li><time>' + DF.fmtTime(e.device_ts) + ' · ' + DF.esc(DF.roster.name(e.rep)) + '</time><p>' + DF.esc(e.text) + '</p></li>').join('') || '<li class="empty">No notes yet</li>') + '</ul>';
-      $('#d-note-form').addEventListener('submit', ev => { ev.preventDefault(); saveNote($('#d-note').value); });
-    } else {
+    } else {                                                          // Notes & History: one newest-first feed + Add Note (no status change needed)
       const fixes = {}; all.filter(e => e.type === 'gps_fix').forEach(e => { fixes[e.ref] = e; });
-      body.innerHTML = '<p class="muted">Audit log: append-only; GPS = distance from the pin when the status was tapped.</p><ul class="timeline">' + (evs.map(e => describe(e, fixes)).join('') || '<li class="empty">No activity yet</li>') + '</ul>';
+      body.innerHTML = '<form class="note-form" id="d-note-form"><input id="d-note" maxlength="500" placeholder="Add a note..." aria-label="Add a note"><button class="btn primary" type="submit">Save</button></form>' +
+        '<h4>Notes &amp; Activity History</h4><p class="muted small">Append-only. GPS = distance from the pin when the status was tapped.</p><ul class="timeline">' +
+        (evs.map(e => describe(e, fixes)).join('') || '<li class="empty">No notes or activity yet</li>') + '</ul>';
+      $('#d-note-form').addEventListener('submit', ev => { ev.preventDefault(); saveNote($('#d-note').value); });
     }
   }
 

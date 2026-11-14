@@ -10,7 +10,7 @@
   const CLUSTER_ICON = ['concat', 'cl-', ['case', ['==', ['get', 'nnew'], ['get', 'point_count']], 'n', 'm'], '-', CLUSTER_LABEL];
   const CLUSTER_RING = { color: '#ffffff', width: 2.5 }, CLUSTER_SIZE = 34, MIXED = '#2c3e50';
   const clusterRadius = () => CLUSTER_SIZE / 2;          // one 34 px badge for every count: roads stay visible when zoomed out
-  const PIN_SIZE = ['step', ['zoom'], 32 / 34, 15, 1];   // 32 px at zoom 12.5-14, 34 px at 15+
+  const PIN_SIZE = 1;   // v2.3: one crisp 32 px pin at every zoom (images are drawn at that size)
   const CLUSTER = { maxZoom: 11, radius: 24 };   // individual pins from zoom 12 (MapLibre switches cluster tiles at whole zooms; closest to the 12.5 spec), tight 24 px clustering below
   const WHITE = '#ffffff';
   const EMPTY = { type: 'FeatureCollection', features: [] };
@@ -18,7 +18,8 @@
   // ---- styles ----
   function imagery() {
     const t = DF.cfg.TILES, usgs = DF.cfg.IMAGERY === 'usgs';
-    return { type: 'raster', tiles: [usgs ? t.usgs : t.esri], tileSize: 256, maxzoom: usgs ? 16 : 19, attribution: usgs ? t.usgsAttr : t.esriAttr };
+    // No @2x endpoint on Esri / USGS: on retina screens use 128 px tiles, so one zoom level deeper is fetched and drawn at 2x density
+    return { type: 'raster', tiles: [usgs ? t.usgs : t.esri], tileSize: (window.devicePixelRatio || 1) >= 2 ? 128 : 256, maxzoom: usgs ? 16 : 19, attribution: usgs ? t.usgsAttr : t.esriAttr };
   }
   const google = () => DF.cfg.BASEMAP === 'google' && !DF.map.fallback;
   function buildStyle(m) {
@@ -89,12 +90,12 @@
     if (!map.getSource('leads')) {
       map.addSource('leads', { type: 'geojson', data: fc(), cluster: true, clusterRadius: CLUSTER.radius, clusterMaxZoom: CLUSTER.maxZoom, promoteId: 'lead_id',
         clusterProperties: { nnew: ['+', ['case', ['==', ['get', 'status_code'], 'NEW'], 1, 0]] } });
-      const unclustered = ['!', ['has', 'point_count']], edge = n => ({ 'circle-radius': ['step', ['zoom'], 16, 15, 17], 'circle-color': ['get', 'stkc'], 'circle-translate': [n, -n],
+      const unclustered = ['!', ['has', 'point_count']], edge = n => ({ 'circle-radius': 15.5, 'circle-color': ['get', 'stkc'], 'circle-translate': [n, -n],
         'circle-stroke-color': WHITE, 'circle-stroke-width': 1.5, 'circle-opacity': 0.95 });
       map.addLayer({ id: 'clusters', type: 'symbol', source: 'leads', filter: ['has', 'point_count'], layout: { 'icon-image': CLUSTER_ICON, 'icon-allow-overlap': true, 'icon-ignore-placement': true } });
-      map.addLayer({ id: 'pin-stack2', type: 'circle', source: 'leads', filter: ['all', unclustered, ['>=', ['coalesce', ['get', 'stk'], 0], 3]], paint: edge(7) });
-      map.addLayer({ id: 'pin-stack', type: 'circle', source: 'leads', filter: ['all', unclustered, ['has', 'stk']], paint: edge(3.5) });
-      map.addLayer({ id: 'pin-sel', type: 'circle', source: 'leads', filter: unclustered, paint: { 'circle-radius': ['step', ['zoom'], 20, 15, 21],
+      map.addLayer({ id: 'pin-stack2', type: 'circle', source: 'leads', filter: ['all', unclustered, ['>=', ['coalesce', ['get', 'stk'], 0], 3]], paint: edge(6) });
+      map.addLayer({ id: 'pin-stack', type: 'circle', source: 'leads', filter: ['all', unclustered, ['has', 'stk']], paint: edge(3) });
+      map.addLayer({ id: 'pin-sel', type: 'circle', source: 'leads', filter: unclustered, paint: { 'circle-radius': 18.5,
         'circle-color': '#1d1d1f', 'circle-opacity': ['case', ['boolean', ['feature-state', 'sel'], false], 0.85, 0] } });
       map.addLayer({ id: 'pins', type: 'symbol', source: 'leads', filter: unclustered, layout: { 'icon-image': ['concat', 'pin-', ['get', 'status_code'], '|', ['get', 'ring']],
         'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-size': PIN_SIZE } });
@@ -167,15 +168,17 @@
   }
 
   // ---- map modes (Map Settings drawer) ----
+  const LABEL = { hybrid: 'Hybrid', street: 'Street', satellite: 'Satellite' };
+  const label = m => { const b = DF.$('#pill-layers'); if (b) b.textContent = LABEL[m] + ' ▾'; };
   function setMode(m) {
     if (!['street', 'hybrid', 'satellite'].includes(m)) return;
-    mode = DF.map.mode = m; DF.store.set('mapMode', m); DF.map.ready = false;
+    mode = DF.map.mode = m; DF.store.set('mapMode', m); DF.map.ready = false; label(m);
     DF.$$('.mode-card').forEach(c => c.classList.toggle('active', c.dataset.mode === m));
     if (map) map.setStyle(buildStyle(m), { diff: false });   // full swap so style.load re-adds pins
   }
 
   function init(container) {
-    mode = DF.map.mode = DF.store.get('mapMode', DF.cfg.DEFAULT_MODE);
+    mode = DF.map.mode = DF.store.get('mapMode', DF.cfg.DEFAULT_MODE); label(mode);
     const rows = DF.sync.all().filter(visible), b = new maplibregl.LngLatBounds();
     rows.forEach(r => b.extend([r.lng, r.lat]));
     map = new maplibregl.Map({ container, style: buildStyle(mode), attributionControl: false, dragRotate: true, touchPitch: false,

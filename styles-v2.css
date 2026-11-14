@@ -118,3 +118,12 @@ h3 .btn { text-transform: none; letter-spacing: 0; padding: 4px 10px; font-size:
 #search-results li.geo b { color: var(--red); }
 .turf-list { list-style: none; padding: 0; margin: 6px 0; } .turf-list li { display: flex; align-items: center; gap: 6px; padding: 4px 0; } .turf-list .t-del { margin-left: auto; }
 #ls-turf[hidden] { display: none; }
+/* v2.3 controls lower + mode label, install banner, history feed */
+.pills.right { top: calc(108px + var(--safe-t)); align-items: flex-end; }
+.pill.mode-pill { width: auto; min-width: 42px; padding: 0 12px; border-radius: 21px; font-size: 14px; white-space: nowrap; }
+.install-banner { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 7; display: flex; gap: 8px; align-items: center; background: #fff; border-radius: 14px; box-shadow: var(--shadow); padding: 8px 10px; font-weight: 600; }
+.install-banner span { flex: 1; } .install-banner[hidden], .install-banner [hidden] { display: none; }
+#view-map:has(.install-banner:not([hidden])) .ring-legend { display: none; }
+.card .last { font-size: 13px; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.note-chip { background: #3c4043; color: #fff; }
+.timeline .h-note p { font-weight: 600; }

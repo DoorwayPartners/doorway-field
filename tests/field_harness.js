@@ -72,11 +72,12 @@ async function newPage(browser, base, opts) {
   await context.addInitScript(o => {
     window.__csp = []; document.addEventListener('securitypolicyviolation', e => window.__csp.push(e.violatedDirective + ' ' + e.blockedURI));
     window.DF_CONFIG_OVERRIDE = Object.assign({ API_URL: 'https://api.test/exec', FIXTURE_URL: '/tests/Brookline_Sanford_50.json', SW: false, FLUSH_EVERY_MS: 3000, ROSTER: o.roster }, o.override || {});
+    if (!o.install && !localStorage.getItem('df.installDismissed')) localStorage.setItem('df.installDismissed', String(Date.now()));   // banner tested on purpose only
     if (o.user && !localStorage.getItem('df.user')) localStorage.setItem('df.user', JSON.stringify({ id: o.user }));
-  }, { user: opts.user || '', override: opts.override || null, roster: TEST_ROSTER });
+  }, { user: opts.user || '', override: opts.override || null, roster: TEST_ROSTER, install: !!opts.install });
   const page = await context.newPage(), errors = [];
   page.on('pageerror', e => errors.push(String(e)));
-  await page.goto(base);
+  await page.goto(base + (opts.path || ''));
   return { context, page, errors };
 }
 const ready = page => page.waitForFunction(() => window.DF && DF.ready && DF.map.ready, null, { timeout: 30000 });

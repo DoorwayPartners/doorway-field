@@ -23,8 +23,9 @@
   // ---- roster ----
   function renderRoster() {
     $('#roster-body').innerHTML = DF.roster.all().map(r => '<tr data-id="' + DF.esc(r.id) + '"><td><i class="dot rc-' + DF.esc(r.id) + '"></i>' + DF.esc(r.name) + '</td><td>' + DF.esc(r.role) + '</td><td>' + DF.esc(r.team || '') +
-      '</td><td>' + DF.esc((r.campaigns || []).includes('*') ? 'All' : (r.campaigns || []).join(', ')) + '</td><td>' + (r.pin ? 'PIN' : '—') + '</td><td><button type="button" class="btn r-edit">Edit</button></td></tr>').join('');
+      '</td><td>' + DF.esc((r.campaigns || []).includes('*') ? 'All' : (r.campaigns || []).join(', ')) + '</td><td>' + (r.pin ? 'PIN' : '—') + '</td><td><button type="button" class="btn r-edit">Edit</button>' + (r.role !== 'Owner' ? ' <button type="button" class="btn r-inv">Copy Invite Link</button>' : '') + '</td></tr>').join('');
     DF.$$('#roster-body .r-edit').forEach(b => b.addEventListener('click', () => editRep(b.closest('tr').dataset.id)));
+    DF.$$('#roster-body .r-inv').forEach(b => b.addEventListener('click', () => copyInvite(b.closest('tr').dataset.id)));
     $('#rf-camps').innerHTML = ['*'].concat(DF.campaigns()).map(c => '<label class="chk"><input type="checkbox" value="' + DF.esc(c) + '"> ' + DF.esc(c === '*' ? 'All campaigns' : c) + '</label>').join('');
     DF.ringCss();
   }
@@ -52,6 +53,21 @@
     $('#roster-form').hidden = true; renderRoster(); DF.toast('Roster saved: ' + name);
     if (r.id === DF.auth.id) DF.setUser(r.id);
     return r;
+  }
+
+  // ---- 1-tap invite link: ?invite=<repId>&role=<role>&name=<name>[&camp=<campaigns>] → the rep's phone sets itself up (never an Owner) ----
+  function inviteUrl(r) {
+    const u = new URL(location.href.split('#')[0].split('?')[0]);
+    u.searchParams.set('invite', r.id); u.searchParams.set('role', r.role); u.searchParams.set('name', r.name);
+    const c = (r.campaigns || []).filter(x => x !== '*'); if (c.length) u.searchParams.set('camp', c.join(','));
+    return u.toString();
+  }
+  async function copyInvite(id) {
+    const r = DF.roster.get(id); if (!r || !DF.isOwner() || r.role === 'Owner') return null;
+    const url = inviteUrl(r); $('#invite-out').value = url; $('#invite-row').hidden = false;
+    try { await navigator.clipboard.writeText(url); DF.toast('Invite link copied for ' + r.name); }
+    catch (e) { $('#invite-out').select(); DF.toast('Invite link ready: copy it from the box'); }
+    return url;
   }
 
   // ---- Status Pin Inventory ----
@@ -113,5 +129,5 @@
     DF.bus.on('sync:state', () => { if (DF.currentTab === 'admin') renderOutbox(); });
   }
 
-  DF.admin = { init, render, addCampaign, editRep, saveRep, renderInventory, saveInventory, renderOutbox, saveSyncUrl, slug };
+  DF.admin = { init, render, addCampaign, editRep, saveRep, inviteUrl, copyInvite, renderInventory, saveInventory, renderOutbox, saveSyncUrl, slug };
 })();
