@@ -1,11 +1,12 @@
 // Doorway Field v2.0 — page config. No secrets, no Drive/Sheet/Script IDs, no emails in source. Public tile URLs only.
 // Everything here is a default: the owner edits roster, campaigns and pin inventory in Admin (saved on the device until the API ships).
 window.DF_CONFIG = Object.assign({
-  VERSION: '2.1.0',
+  VERSION: '2.2.0',
   ORG_ID: 'doorway',
   API_URL: '',                 // default Sync URL (Apps Script / Supabase function). Blank = local-only; Admin › Sync Outbox can set it
   FIXTURE_URL: '',             // tests/dev only
-  IMAGERY: 'esri',             // 'esri' | 'usgs'
+  BASEMAP: 'google',           // 'google' (Hybrid / Street / Satellite) | 'esri' (Esri imagery + OpenFreeMap). Google auto-falls back to Esri
+  IMAGERY: 'esri',             // fallback imagery: 'esri' | 'usgs'
   DEFAULT_MODE: 'hybrid',
   FLUSH_EVERY_MS: 60000,
   UNDO_MS: 5000,
@@ -25,8 +26,11 @@ window.DF_CONFIG = Object.assign({
     { key: 'install_date', label: 'Install Date', type: 'date', required: false }
   ],
   ROUTE_MAX_STOPS: 23,
-  GEOCODE_URL: 'https://nominatim.openstreetmap.org/reverse',   // free OSM reverse geocoder: light use only (1 request/s, cached)
+  GEOCODE_URL: 'https://nominatim.openstreetmap.org/reverse',
+  SEARCH_URL: 'https://nominatim.openstreetmap.org/search',      // street / town jump in the search bar (debounced, light use)   // free OSM reverse geocoder: light use only (1 request/s, cached)
   TILES: {
+    google: 'https://mt{s}.google.com/vt/lyrs={lyrs}&x={x}&y={y}&z={z}',   // y hybrid | m street | s satellite
+    googleAttr: 'Map data © Google',
     esri: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
     esriAttr: 'Imagery © Esri, Maxar, Earthstar Geographics, and the GIS User Community',
     usgs: 'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',

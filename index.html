@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' https://unpkg.com; img-src 'self' data: blob: https://server.arcgisonline.com https://basemap.nationalmap.gov https://tiles.openfreemap.org; connect-src 'self' https:; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' https://unpkg.com; img-src 'self' data: blob: https://mt0.google.com https://mt1.google.com https://mt2.google.com https://mt3.google.com https://server.arcgisonline.com https://basemap.nationalmap.gov https://tiles.openfreemap.org; connect-src 'self' https:; worker-src 'self' blob:; child-src 'self' blob:; font-src 'self' data:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="theme-color" content="#e31b23">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -28,6 +28,7 @@
   <script src="LeadImport.js" defer></script>
   <script src="AdminPanel.js" defer></script>
   <script src="PinStudio.js" defer></script>
+  <script src="TurfZones.js" defer></script>
 </head>
 <body>
 <main id="app">
@@ -52,10 +53,12 @@
       <button type="button" class="pill" id="pill-compass" aria-label="Compass: reset north">N</button>
       <button type="button" class="pill gps" id="pill-gps" aria-label="Recenter and follow me">◎</button>
     </div>
-    <div id="search-bar" class="floatbar"><input id="search-input" type="search" placeholder="Search address or name" autocomplete="off"><ul id="search-results"></ul></div>
+    <div id="search-bar" class="floatbar"><input id="search-input" type="search" placeholder="Search leads, street or town" autocomplete="off"><ul id="search-results"></ul></div>
     <div id="lasso-bar" class="floatbar actionbar"><span id="lasso-count">Drag a circle around doors</span><button type="button" class="btn" id="lasso-cancel">Cancel</button><button type="button" class="btn primary" id="lasso-done">Done</button></div>
     <div id="sel-bar" class="floatbar actionbar"><span id="sel-count">0 selected</span><button type="button" class="btn" id="sel-clear">Clear</button><button type="button" class="btn primary" id="sel-status">Actions</button></div>
     <button type="button" id="route-clear" class="route-clear" hidden>Route ✕</button>
+    <div id="add-cross" class="center-cross" hidden></div>
+    <div id="add-bar" class="floatbar add-bar"><b>Add pin</b><input id="add-unit" placeholder="Unit (#A)" maxlength="12" aria-label="Unit"><button type="button" class="btn" id="add-gps">My GPS</button><button type="button" class="btn primary" id="add-center">Map centre ✛</button><button type="button" class="x" id="add-close" aria-label="Close add pin">×</button></div>
     <div id="stamp-bar" class="stamp-bar"><span class="muted">Rapid-Stamp: pick a status, tap houses</span><div id="stamp-items" class="lead-menu"></div><button type="button" class="x" id="stamp-close" aria-label="Exit Rapid-Stamp">×</button></div>
     <div id="wheel" class="wheel" role="dialog" aria-label="Status wheel"><div class="crosshair"></div><div id="wheel-items" class="wheel-items"></div><button type="button" class="x wheel-x" id="wheel-cancel" aria-label="Cancel">×</button></div>
 
@@ -70,7 +73,7 @@
       <p id="card-appt" class="appt"></p>
       <p id="card-intel" class="intel"></p>
       <div id="lead-menu" class="lead-menu" role="toolbar" aria-label="Lead Menu"></div>
-      <div class="card-actions"><button type="button" class="btn" id="card-appt-btn">Appointment</button><button type="button" class="btn" id="card-cb-btn">Callback</button><button type="button" class="btn" id="card-forms-btn">Forms</button></div>
+      <div class="card-actions"><button type="button" class="btn" id="card-appt-btn">Appointment</button><button type="button" class="btn" id="card-cb-btn">Callback</button><button type="button" class="btn" id="card-forms-btn">Forms</button><a class="btn" id="card-dir" target="_blank" rel="noopener" href="#">Directions</a></div>
       <form id="card-note-form" class="note-bar"><label for="card-note">NOTES</label><input id="card-note" maxlength="500" placeholder="Add a note..."><button class="btn" type="submit">Save</button></form>
     </article>
   </section>
@@ -128,14 +131,13 @@
     </div>
     <div class="manager-only">
       <h3>Status Pin Inventory <button type="button" class="btn" id="inv-reset">Reset</button> <button type="button" class="btn primary" id="inv-save">Save</button></h3>
-      <p class="muted small">Tap a pin to change its icon or colour (saves instantly).</p>
+      <p class="muted small">Tap a pin to change its icon or colour (saves instantly). The disposition set itself is fixed.</p>
       <div class="pv-scroll"><table class="grid"><thead><tr><th>Pin</th><th>Label</th><th>Icon</th><th>Colour</th><th>Menu</th><th>Knock</th><th>Contact</th><th>Soft-lock</th></tr></thead><tbody id="inv-body"></tbody></table></div>
       <div id="pin-studio" class="pin-studio" hidden>
         <div class="ps-head"><img id="ps-preview" class="ps-pin" alt="Pin preview"><img id="ps-preview-rep" class="ps-pin" alt="Pin preview with a rep ring"><b id="ps-title"></b><button type="button" class="x" id="ps-close" aria-label="Close pin editor">✕</button></div>
         <div id="ps-icons" class="ps-grid"></div>
         <div id="ps-swatches" class="ps-grid ps-sw"></div>
       </div>
-      <div class="filters"><input id="ns-name" placeholder="New status (e.g. Callback)" maxlength="24"><button type="button" class="btn primary" id="ns-add">+ Add Status</button></div>
     </div>
     <p class="muted" id="app-version"></p>
   </section>
@@ -156,6 +158,7 @@
 <div id="filter-drawer" class="modal drawer" role="dialog" aria-label="Filters"><div class="sheet">
   <div class="sheet-head"><h2>Filters</h2><span><button type="button" class="btn" id="filter-reset">Reset</button> <button type="button" class="x" data-close="filter-drawer" aria-label="Close">×</button></span></div>
   <div id="filter-body" class="filter-body"></div>
+  <div id="turf-filter" class="filter-body turf-filter"></div>
 </div></div>
 
 <div id="lasso-sheet" class="modal drawer sheet-modal" role="dialog" aria-label="Selection"><div class="sheet">
@@ -164,6 +167,7 @@
   <div class="pv-actions manager-only"><select id="ls-rep" aria-label="Assign rep"></select><button type="button" class="btn primary" id="ls-assign">Assign Rep</button></div>
   <h4>Disposition Breakdown <span class="muted">tap to toggle</span></h4><ul id="ls-disp" class="breakdown"></ul>
   <div class="pv-actions"><select id="ls-target" aria-label="Change status to"></select><button type="button" class="btn primary" id="ls-apply">Change Status</button></div>
+  <div id="ls-turf" class="manager-only" hidden><h4>Save as Turf Zone</h4><div class="pv-actions"><input id="ls-turf-name" placeholder="Zone name" maxlength="40" aria-label="Zone name"><select id="ls-turf-rep" aria-label="Zone rep"></select><button type="button" class="btn primary" id="ls-turf-save">Save as Turf Zone</button></div></div>
   <h4>Create Route (up to 23 stops)</h4><button type="button" class="btn" id="ls-route-btn">Create Route</button><div id="ls-route"></div>
   <div class="pv-actions"><button type="button" class="btn" id="ls-export">Export Selected CSV</button><button type="button" class="btn danger manager-only" id="ls-delete">Delete Selected</button></div>
 </div></div>

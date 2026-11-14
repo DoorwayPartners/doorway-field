@@ -66,11 +66,10 @@
     if (!DF.isManager()) return null;
     const over = {};
     DF.$$('#inv-body tr').forEach(tr => {
-      const code = tr.dataset.code, cur = DF.sync.BY_CODE[code], d = DF.sync.DEFAULTS.find(x => x.code === code) || cur, v = { label: DF.$('.i-label', tr).value.trim() || d.label, icon: DF.$('.i-icon', tr).value.trim() || d.icon,
+      const code = tr.dataset.code, d = DF.sync.DEFAULTS.find(x => x.code === code), v = { label: DF.$('.i-label', tr).value.trim() || d.label, icon: DF.$('.i-icon', tr).value.trim() || d.icon,
         color: COLOR.test(DF.$('.i-color', tr).value) ? DF.$('.i-color', tr).value : d.color };
       FLAGS.forEach(f => { v[f[0]] = DF.$('.i-' + f[0], tr).checked ? 1 : 0; });
       if (code === 'SOLD') v.lock = 0;                                    // owner rule: SOLD stays editable / resettable
-      if (cur && cur.custom) { over[code] = Object.assign({ custom: 1, short: cur.short, ring: 0 }, v); return; }   // Admin-created status: keep it whole
       const diff = {}; Object.keys(v).forEach(k => { if (v[k] !== d[k]) diff[k] = v[k]; });
       if (Object.keys(diff).length) over[code] = diff;
     });

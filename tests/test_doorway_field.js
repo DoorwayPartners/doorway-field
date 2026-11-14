@@ -39,7 +39,7 @@ const guardrails = () => require('./scan_secrets_csp.js').scan(ok);
     ok(cl.icons >= 1 && cl.size === JSON.stringify(['step', ['zoom'], 32 / 34, 15, 1]) && cl.ring === 'circle', '34 px dual-ring pin images (32 px below zoom 15) + stacked-disc edge layer', cl);
     ok((await page.$$eval('#lead-menu .dispo', b => b.map(x => x.dataset.code))).join() === MENU.join(), 'Lead Menu = the 10 menu codes, in order');
     const attr = await page.evaluate(() => DF.$('.maplibregl-ctrl-attrib').textContent);
-    ok(/Esri/.test(attr) && /OpenStreetMap/.test(attr), 'attribution badge visible (Esri + OpenStreetMap)');
+    ok(/Google/.test(attr), 'attribution badge visible (Map data © Google)', attr);
     const target = rows.rows.find(r => r.status_code === 'NEW' && r.turf_id === 'BROOKLINE-A');
     await page.evaluate(id => DF.map.jumpTo(id), target.lead_id); await idle(page);
     const pt = await page.evaluate(id => { const r = DF.sync.get(id), p = DF.map.instance.project([r.lng, r.lat]), b = DF.$('#map').getBoundingClientRect(); return { x: b.left + p.x, y: b.top + p.y }; }, target.lead_id);
@@ -101,8 +101,8 @@ const guardrails = () => require('./scan_secrets_csp.js').scan(ok);
     for (const m of ['satellite', 'street', 'hybrid']) {
       await page.click('#pill-layers'); await page.click('.mode-card[data-mode=' + m + ']');
       await page.waitForFunction(x => DF.map.ready && DF.map.mode === x, m, { timeout: 15000 });
-      const s = await page.evaluate(() => { const st = DF.map.instance.getStyle(); return { img: !!st.sources.imagery, omt: !!st.sources.omt, leads: !!st.sources.leads, ring: !!DF.map.instance.getLayer('pin-stack') }; });
-      ok((m === 'street' ? !s.img : m === 'satellite' ? s.img && !s.omt : s.img && s.omt) && s.leads && s.ring, 'Map Settings › ' + m + ' (pins + rings re-added)', s);
+      const s = await page.evaluate(() => { const st = DF.map.instance.getStyle(); return { tiles: st.sources.imagery ? st.sources.imagery.tiles[0] : '', leads: !!st.sources.leads, ring: !!DF.map.instance.getLayer('pin-stack') }; });
+      ok(s.tiles.includes('google.com/vt/lyrs=' + { street: 'm', satellite: 's', hybrid: 'y' }[m] + '&') && s.leads && s.ring, 'Map Settings › ' + m + ' = Google lyrs=' + { street: 'm', satellite: 's', hybrid: 'y' }[m] + ' (pins + rings re-added)', s);
     }
     await page.click('#pill-gps'); ok(await page.evaluate(() => DF.tools.following), 'Recenter GPS starts Follow Me');
     await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' }); document.dispatchEvent(new Event('visibilitychange')); });

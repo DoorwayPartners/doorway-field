@@ -34,7 +34,7 @@ function apiHandle(body) {
 }
 async function stub(context) {
   await context.route('https://unpkg.com/maplibre-gl@4.7.1/dist/*', r => r.fulfill({ path: path.join(ML, path.basename(new URL(r.request().url()).pathname)) }));
-  await context.route(/server\.arcgisonline\.com|basemap\.nationalmap\.gov/, r => r.fulfill({ body: PNG, contentType: 'image/png' }));
+  await context.route(/server\.arcgisonline\.com|basemap\.nationalmap\.gov|mt\d\.google\.com/, r => r.fulfill({ body: PNG, contentType: 'image/png', headers: { 'access-control-allow-origin': '*' } }));
   await context.route('https://tiles.openfreemap.org/**', r => {
     const u = r.request().url();
     if (u.endsWith('/styles/liberty')) return r.fulfill({ json: { version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf', sources: {}, layers: [{ id: 'bg', type: 'background', paint: { 'background-color': '#f4f1ea' } }] } });
@@ -43,7 +43,10 @@ async function stub(context) {
     return r.fulfill({ body: Buffer.alloc(0), contentType: 'application/x-protobuf' });
   });
   await context.route('https://nominatim.openstreetmap.org/**', r => {           // reverse geocoder stub: deterministic house number from the coordinates
-    const u = new URL(r.request().url()), n = 300 + Math.round(Math.abs(Number(u.searchParams.get('lon')) * 1e4)) % 600;
+    const u = new URL(r.request().url());
+    if (u.pathname === '/search') return r.fulfill({ json: /portland/i.test(u.searchParams.get('q')) ? [{ display_name: 'Portland, Cumberland County, Maine, United States', lat: '43.6591', lon: '-70.2568',
+      boundingbox: ['43.54', '43.71', '-70.35', '-70.17'] }] : [], headers: { 'access-control-allow-origin': '*' } });
+    const n = 300 + Math.round(Math.abs(Number(u.searchParams.get('lon')) * 1e4)) % 600;
     r.fulfill({ json: { address: { house_number: String(n), road: 'Elm Street', city: 'Sanford', 'ISO3166-2-lvl4': 'US-ME', postcode: '04073' } }, headers: { 'access-control-allow-origin': '*' } });
   });
   await context.route('https://api.test/exec', r => r.fulfill({ json: apiHandle(JSON.parse(r.request().postData() || '{}')), headers: { 'access-control-allow-origin': '*' } }));
@@ -65,6 +68,7 @@ async function newPage(browser, base, opts) {
   const context = await browser.newContext(Object.assign({}, devices[opts.device || 'iPhone 13'], { serviceWorkers: 'block', permissions: ['geolocation'],
     geolocation: opts.geo || { latitude: 43.4394, longitude: -70.7743 }, acceptDownloads: true }));
   await stub(context);
+  if (opts.block) await context.route(opts.block, r => r.abort());   // later routes win: simulate a blocked tile host
   await context.addInitScript(o => {
     window.__csp = []; document.addEventListener('securitypolicyviolation', e => window.__csp.push(e.violatedDirective + ' ' + e.blockedURI));
     window.DF_CONFIG_OVERRIDE = Object.assign({ API_URL: 'https://api.test/exec', FIXTURE_URL: '/tests/Brookline_Sanford_50.json', SW: false, FLUSH_EVERY_MS: 3000, ROSTER: o.roster }, o.override || {});

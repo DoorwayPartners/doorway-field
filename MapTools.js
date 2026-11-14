@@ -29,12 +29,12 @@
     } catch (e) { return fallback; }
   }
   const activeCampaign = () => DF.campaign === '*' ? (DF.myCampaigns()[0] || DF.cfg.DEFAULT_CAMPAIGN) : DF.campaign;
-  async function createPinAt(ll, code) {
+  async function createPinAt(ll, code, apt, how) {
     const g = await geocode(ll);
-    const row = Object.assign({ lat: ll.lat, lng: ll.lng, status_code: 'NEW', campaign: activeCampaign(), assigned_rep_email: DF.isManager() ? '' : DF.auth.id }, g);
-    const rep = await DF.sync.importRows([row], { source: 'drop' }), id = DF.sync.leadId(row.address, '', row.zip || '');
+    const row = Object.assign({ lat: ll.lat, lng: ll.lng, status_code: 'NEW', campaign: activeCampaign(), assigned_rep_email: DF.isManager() ? '' : DF.auth.id }, g, apt ? { apt } : {});
+    const rep = await DF.sync.importRows([row], { source: 'drop' }), id = DF.sync.leadId(row.address, row.apt || '', row.zip || '');
     if (!rep.added && !rep.updated) { DF.toast('Could not drop a pin here'); return null; }
-    DF.sync.append({ type: 'create', lead_id: id, campaign: row.campaign, how: stamp ? 'stamp' : 'wheel' });
+    DF.sync.append({ type: 'create', lead_id: id, campaign: row.campaign, how: how || (stamp ? 'stamp' : 'wheel') });
     if (code && code !== 'NEW') DF.card.dispose(id, code, { source: stamp ? 'stamp' : 'wheel' });
     if (!stamp) { DF.map.select([id]); DF.bus.emit('pin:selected', id); }
     return id;
@@ -42,7 +42,7 @@
 
   // ---- radial status wheel (centred on screen; the map eases the pressed house to the centre: no positioned elements) ----
   function openWheel(ll) {
-    wheelAt = ll; dropArmed = false; $('#pill-drop').classList.remove('active');
+    wheelAt = ll; showAdd(false);
     DF.map.instance.easeTo({ center: ll, duration: 250 });
     const items = DF.sync.STATUS.filter(s => s.menu);
     $('#wheel-items').className = 'wheel-items wn-' + Math.min(items.length, 12);
@@ -62,7 +62,7 @@
     poly = poly || (lasso || []).slice(); endLasso(true);
     if (poly.length < 3) { DF.map.drawLasso([]); return []; }
     DF.map.drawLasso(poly);
-    const ids = pointsIn(poly); DF.map.select(ids); DF.lasso.open(ids, 'Lasso');
+    const ids = pointsIn(poly); DF.map.select(ids); DF.lasso.open(ids, 'Lasso', poly);
     return ids;
   }
   function bindFreehand() {
@@ -145,10 +145,40 @@
   }
   function position() { if (lastPos) return lastPos; const c = DF.map.instance ? DF.map.instance.getCenter() : { lng: 0, lat: 0 }; return [c.lng, c.lat]; }
 
+  // ---- + Add Pin: unlisted new builds / extra units at my GPS or the map-centre crosshair ----
+  function showAdd(on) { $('#add-bar').classList.toggle('open', on); $('#add-cross').hidden = !on; dropArmed = on; $('#pill-drop').classList.toggle('active', on); }
+  async function addPin(where) {
+    const unit = $('#add-unit').value.trim().slice(0, 12); let ll;
+    if (where === 'gps') { const f = await locateFresh(800); if (!f) { DF.toast('No GPS fix: use the map centre'); return null; } ll = { lng: f.ll[0], lat: f.ll[1] }; }
+    else { const c = DF.map.instance.getCenter(); ll = { lng: c.lng, lat: c.lat }; }
+    const id = await createPinAt(ll, 'NEW', unit, unit ? 'unit' : where);
+    if (id) { $('#add-unit').value = ''; showAdd(false); }
+    return id;
+  }
+  // ---- search: loaded leads (address, unit, name, zip, note) first, then OSM Nominatim for any street or town ----
+  let geoT = null, geoSeq = 0;
+  async function geoSearch(q) {
+    const seq = ++geoSeq, c = DF.map.instance.getCenter();
+    try {
+      const u = DF.cfg.SEARCH_URL + '?format=json&limit=4&countrycodes=us&q=' + encodeURIComponent(q) + '&viewbox=' + [c.lng - 1, c.lat + 1, c.lng + 1, c.lat - 1].join(',');
+      const res = await (await fetch(u, { headers: { Accept: 'application/json' } })).json(); if (seq !== geoSeq || !Array.isArray(res)) return [];
+      res.slice(0, 4).forEach(p => {
+        const parts = String(p.display_name || '').split(','), li = document.createElement('li'); li.className = 'geo';
+        li.innerHTML = '<b>⌖ ' + DF.esc(parts.slice(0, 2).join(',')) + '</b><span>' + DF.esc(parts.slice(2, 4).join(',').trim()) + '</span>';
+        li.addEventListener('click', () => {
+          $('#search-bar').classList.remove('open'); DF.map.moved = true; const m = DF.map.instance, bb = (p.boundingbox || []).map(Number);
+          if (bb.length === 4 && bb[1] - bb[0] > 0.01) m.fitBounds([[bb[2], bb[0]], [bb[3], bb[1]]], { padding: 40, maxZoom: 16, duration: 0 }); else m.jumpTo({ center: [+p.lon, +p.lat], zoom: 17 });
+        });
+        $('#search-results').appendChild(li);
+      });
+      return res;
+    } catch (e) { return []; }
+  }
   function search(q) {
-    q = q.trim().toLowerCase(); const out = $('#search-results'); out.innerHTML = '';
+    q = q.trim().toLowerCase(); const out = $('#search-results'); out.innerHTML = ''; clearTimeout(geoT); geoSeq++;
     if (q.length < 2) return [];
-    const hits = DF.sync.all().filter(r => DF.inCampaign(r) && (r.address + ' ' + r.apt + ' ' + r.first_name + ' ' + r.last_name + ' ' + r.zip).toLowerCase().includes(q)).slice(0, 6);
+    const hits = DF.sync.all().filter(r => DF.inCampaign(r) && [r.address, r.apt, r.first_name, r.last_name, r.zip, r.city, r.rep_note].join(' ').toLowerCase().includes(q)).slice(0, 6);
+    if (q.length >= 3 && hits.length < 3) geoT = setTimeout(() => geoSearch(q), 500);
     hits.forEach(r => { const li = document.createElement('li'); li.innerHTML = '<b>' + DF.esc(r.address + (r.apt ? ' ' + r.apt : '')) + '</b><span>' + DF.esc([r.first_name, r.last_name].join(' ').trim() || r.city) + '</span>';
       li.addEventListener('click', () => { $('#search-bar').classList.remove('open'); DF.map.jumpTo(r.lead_id); }); out.appendChild(li); });
     return hits;
@@ -168,7 +198,8 @@
     on('#stamp-close', () => { setStamp(false); $('#stamp-bar').classList.remove('open'); $('#pill-stamp').classList.remove('active'); });
     on('#pill-layers', () => DF.openModal('layers-drawer'));
     DF.$$('.mode-card').forEach(c => c.addEventListener('click', () => { DF.map.setMode(c.dataset.mode); DF.closeModal('layers-drawer'); }));
-    on('#pill-drop', () => { dropArmed = !dropArmed; $('#pill-drop').classList.toggle('active', dropArmed); if (dropArmed) DF.toast('Tap a house to open the status wheel (or long-press anywhere)'); });
+    on('#pill-drop', () => showAdd(!dropArmed));   // bar explains itself: tap a house, or My GPS / Map centre
+    on('#add-gps', () => addPin('gps')); on('#add-center', () => addPin('center')); on('#add-close', () => showAdd(false));
     on('#pill-compass', () => DF.map.instance.resetNorthPitch());
     on('#pill-gps', () => follow());
     on('#wheel-cancel', closeWheel);
@@ -179,5 +210,5 @@
   }
 
   DF.tools = { init, busy: () => !!(lasso || wheelAt || dropArmed), pinTap, mapTap, openWheel, closeWheel, createPinAt, geocode, startLasso, finishLasso, endLasso,
-    pointsIn, pip, setStamp, follow, locateOnce, locateFresh, position, search, following: false, stamp: () => stamp, multi: () => multi };
+    pointsIn, pip, setStamp, follow, locateOnce, locateFresh, position, addPin, geoSearch, showAdd, search, following: false, stamp: () => stamp, multi: () => multi };
 })();

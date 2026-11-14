@@ -80,8 +80,8 @@
     const n = DF.sync.removeMany(ids, 'lasso').length; armedDelete = false; DF.map.refresh(); DF.toast(n + ' doors deleted (kept in history)'); close(); return n;
   }
 
-  function open(list, title) {
-    ids = list.slice(); toggled = null; armedDelete = false;
+  function open(list, title, poly) {
+    ids = list.slice(); toggled = null; armedDelete = false; DF.bus.emit('lasso:open', poly || null);
     $('#lasso-sheet').dataset.title = title || 'Lasso';
     $('#ls-route').innerHTML = '';
     render(); DF.openModal('lasso-sheet');

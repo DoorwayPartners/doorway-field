@@ -50,6 +50,7 @@
     $('#card-status').textContent = st(r.status_code).label;
     $('#card-status').className = 'status-chip chip-' + r.status_code;
     $('#card-address').textContent = addr(r) + ', ' + [r.city, r.state, r.zip].filter(Boolean).join(' ');
+    $('#card-dir').href = 'https://maps.google.com/?daddr=' + r.lat + ',' + r.lng;                 // 1-tap turn-by-turn in native maps
     $('#card-meta').textContent = r.campaign + ' · ' + DF.roster.name(r.assigned_rep_email);
     $('#card-appt').textContent = r.appt_at ? 'Appointment / callback ' + DF.fmtTime(r.appt_at) : '';
     $('#card-intel').textContent = r.turf_intel_note || '';

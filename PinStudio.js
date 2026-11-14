@@ -1,5 +1,5 @@
 // Doorway Field v2.1 — PinStudio: SalesRabbit-scale dual-ring pin renderer (shared by the map + Admin previews) and the
-// Admin › Status Pin Inventory visual editor (icon grid, colour swatches, live 34 px preview, + new status). Canvas only: no fonts, no inline styles.
+// Admin › Status Pin Inventory visual editor (icon grid, colour swatches, live 34 px preview). v2.2: no new statuses: the official disposition set is locked. Canvas only: no fonts, no inline styles.
 (function () {
   'use strict';
   const DF = window.DF;
@@ -71,16 +71,6 @@
     await DF.admin.saveInventory();                                            // picking = saving (2-tap edit)
     paint();
   }
-  async function addStatus(name) {
-    name = String(name || '').trim().slice(0, 24); if (!name || !DF.isManager()) return null;
-    const c = 'X_' + name.toUpperCase().normalize('NFKD').replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 12);
-    if (c === 'X_' || DF.sync.BY_CODE[c]) { DF.toast('That status already exists'); return null; }
-    const over = Object.assign({}, DF.sync.meta('statuses') || {});
-    over[c] = { custom: 1, label: name, short: name.slice(0, 8), color: '#9b51e0', icon: '★', menu: 1, knock: 1, contact: 0, lock: 0, ring: 0 };
-    await DF.sync.setMeta('statuses', over);
-    DF.admin.renderInventory(); open(c); DF.toast('Status added: ' + name);
-    return c;
-  }
   function init() {
     const icons = DF.$('#ps-icons'), sw = DF.$('#ps-swatches'); if (!icons) return;
     icons.innerHTML = Object.keys(ICONS).map(ch => '<button type="button" data-icon="' + ch + '" title="' + ICONS[ch].name + '" aria-label="' + ICONS[ch].name + '"><img alt="" src="' +
@@ -89,10 +79,9 @@
     DF.$$('#ps-icons button').forEach(b => b.addEventListener('click', () => pick('icon', b.dataset.icon)));
     DF.$$('#ps-swatches button').forEach(b => b.addEventListener('click', () => pick('color', b.dataset.color)));
     DF.$('#ps-close').addEventListener('click', () => { code = null; paint(); });
-    DF.$('#ns-add').addEventListener('click', () => { addStatus(DF.$('#ns-name').value); DF.$('#ns-name').value = ''; });
     DF.$('#inv-body').addEventListener('click', e => { const b = e.target.closest('.pin-pv'); if (b) open(b.closest('tr').dataset.code); });
     DF.$('#inv-body').addEventListener('input', e => { const r = e.target.closest('tr'); if (r && r.dataset.code === code) paint(); });
   }
 
-  DF.pins = { ICONS, SWATCHES, SIZE: PIN, BOX, pinCanvas, pinImage, pinUrl, open, pick, addStatus, paint, init, current: () => code };
+  DF.pins = { ICONS, SWATCHES, SIZE: PIN, BOX, pinCanvas, pinImage, pinUrl, open, pick, paint, init, current: () => code };
 })();

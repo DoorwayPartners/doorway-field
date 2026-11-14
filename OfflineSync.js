@@ -18,8 +18,7 @@
   function applyStatuses(over) {
     over = over || {}; STATUS.length = 0; Object.keys(BY_CODE).forEach(k => delete BY_CODE[k]);
     DEFAULTS.forEach(d => STATUS.push(Object.assign({}, d, over[d.code] || {}, { code: d.code })));
-    Object.keys(over).filter(k => over[k] && over[k].custom && !DEFAULTS.some(d => d.code === k))                  // Admin-created statuses (v2.1)
-      .forEach(k => STATUS.push(Object.assign({ label: k, short: k, color: '#888888', icon: '★', menu: 1, knock: 1, contact: 0, lock: 0, ring: 0 }, over[k], { code: k })));
+    // v2.2: dispositions are locked to the official set. Custom codes saved by v2.1 are ignored so exports + reporting stay uniform.
     STATUS.forEach(s => { BY_CODE[s.code] = s; });
     DF.bus.emit('statuses:changed');
   }

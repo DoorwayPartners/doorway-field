@@ -20,8 +20,14 @@
     const t = DF.cfg.TILES, usgs = DF.cfg.IMAGERY === 'usgs';
     return { type: 'raster', tiles: [usgs ? t.usgs : t.esri], tileSize: 256, maxzoom: usgs ? 16 : 19, attribution: usgs ? t.usgsAttr : t.esriAttr };
   }
+  const google = () => DF.cfg.BASEMAP === 'google' && !DF.map.fallback;
   function buildStyle(m) {
     const t = DF.cfg.TILES;
+    if (google()) {                                                  // Google Hybrid (labels, borders, shields) | Street | Satellite
+      const lyrs = { hybrid: 'y', street: 'm', satellite: 's' }[m] || 'y';
+      return { version: 8, glyphs: t.glyphs, sources: { imagery: { type: 'raster', tiles: [0, 1, 2, 3].map(i => t.google.replace('{s}', i).replace('{lyrs}', lyrs)), tileSize: 256, maxzoom: 20,
+        attribution: t.googleAttr } }, layers: [{ id: 'imagery', type: 'raster', source: 'imagery' }] };
+    }
     if (m === 'street') return t.streetStyle;
     const s = { version: 8, glyphs: t.glyphs, sources: { imagery: imagery() }, layers: [{ id: 'imagery', type: 'raster', source: 'imagery' }] };
     if (m !== 'hybrid') return s;
@@ -176,6 +182,9 @@
       center: rows.length ? b.getCenter() : [-98.5, 39.8], zoom: rows.length ? 13 : 3, maxZoom: 20 });
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
     map.on('style.load', addLayers);
+    let tileErr = 0, tileOk = false;                                 // Google unreachable / blocked → Esri imagery, same modes
+    map.on('sourcedata', e => { if (e.sourceId === 'imagery' && e.tile) tileOk = true; });
+    map.on('error', e => { if (e.sourceId !== 'imagery' || !google() || tileOk || ++tileErr < 3) return; DF.map.fallback = true; DF.toast('Google tiles unavailable: using Esri imagery'); setMode(mode); });
     map.on('dragstart', () => { DF.map.moved = true; });
     map.on('styleimagemissing', e => { if (/^cl-/.test(e.id)) map.addImage(e.id, clusterIcon(e.id), { pixelRatio: 2 }); else if (/^pin-/.test(e.id)) addPin(e.id); });
     map.once('load', () => {
@@ -193,7 +202,7 @@
     DF.bus.on('statuses:changed', () => { DF.ringCss(); if (map && map.getSource('leads')) { dropPins(); refresh(); } });
     DF.bus.on('tab:changed', t => { if (t === 'map' && map) setTimeout(() => map.resize(), 0); });
     DF.$$('.mode-card').forEach(c => c.classList.toggle('active', c.dataset.mode === mode));
-    DF.map.instance = map;
+    DF.map.instance = map;  // CLUSTER settings, cluster images + pin taps are unchanged from v2.1
     renderLegend();
   }
 
