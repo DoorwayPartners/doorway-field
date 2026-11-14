@@ -1,7 +1,7 @@
 // Doorway Field v2.0 — page config. No secrets, no Drive/Sheet/Script IDs, no emails in source. Public tile URLs only.
 // Everything here is a default: the owner edits roster, campaigns and pin inventory in Admin (saved on the device until the API ships).
 window.DF_CONFIG = Object.assign({
-  VERSION: '2.0.1',
+  VERSION: '2.1.0',
   ORG_ID: 'doorway',
   API_URL: '',                 // default Sync URL (Apps Script / Supabase function). Blank = local-only; Admin › Sync Outbox can set it
   FIXTURE_URL: '',             // tests/dev only

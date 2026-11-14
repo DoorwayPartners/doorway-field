@@ -14,11 +14,12 @@ button.me { max-width: 96px; white-space: nowrap; overflow: hidden; text-overflo
 button.me { border: 0; cursor: pointer; }
 .badge { position: absolute; top: -2px; right: -2px; min-width: 18px; height: 18px; border-radius: 9px; background: var(--red); color: #fff; font-size: 11px; line-height: 18px; }
 .pill { position: relative; }
-.ring-legend { position: absolute; top: calc(48px + var(--safe-t)); left: 70px; right: 70px; z-index: 5; display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; pointer-events: none; }
+.ring-legend { position: absolute; left: 12px; bottom: 72px; max-width: calc(100% - 24px); z-index: 5; display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-start; pointer-events: none; }
+#view-map:has(.card.open) .ring-legend, #view-map:has(.stamp-bar.open) .ring-legend { display: none; }   /* never under the card / stamp bar */
 .ring-legend[hidden] { display: none; }
 .lg { background: rgba(255, 255, 255, .92); border-radius: 999px; padding: 2px 8px 2px 4px; font-size: 11px; font-weight: 600; box-shadow: 0 2px 6px rgba(0, 0, 0, .15); display: inline-flex; align-items: center; gap: 4px; }
 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: middle; box-shadow: 0 0 0 1px rgba(0, 0, 0, .15); }
-.route-clear { position: absolute; left: 12px; bottom: 14px; z-index: 6; border: 0; background: #1d1d1f; color: #fff; border-radius: 999px; padding: 8px 12px; font-weight: 600; box-shadow: var(--shadow); }
+.route-clear { position: absolute; right: 12px; bottom: 30px; z-index: 6; border: 0; background: #1d1d1f; color: #fff; border-radius: 999px; padding: 8px 12px; font-weight: 600; box-shadow: var(--shadow); }
 .route-clear[hidden] { display: none; }
 
 /* Rapid-Stamp bar */
@@ -97,3 +98,12 @@ h3 .btn { text-transform: none; letter-spacing: 0; padding: 4px 10px; font-size:
 .note-bar { padding-top: 6px; } .note-bar input { padding: 7px 9px; }
 .sheet label.chk { flex-direction: row; align-items: center; margin: 0; color: var(--ink); font-size: 15px; }
 .sheet label.chk input { width: 18px; height: 18px; }
+/* v2.1 Status Pin Inventory visual editor */
+.pin-pv { border: 0; background: none; padding: 0; vertical-align: middle; cursor: pointer; } .pin-pv img { width: 34px; height: 34px; display: block; }
+.pin-studio { border: 1px solid var(--line); border-radius: 14px; padding: 10px; margin: 8px 0; background: #fff; }
+.pin-studio[hidden] { display: none; }
+.ps-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; } .ps-head b { flex: 1; } .ps-pin { width: 46px; height: 46px; }
+.ps-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(42px, 1fr)); gap: 6px; margin-bottom: 8px; }
+.ps-grid button { border: 2px solid transparent; border-radius: 12px; background: var(--soft); padding: 2px; cursor: pointer; } .ps-grid button img { width: 34px; height: 34px; display: block; margin: 0 auto; }
+.ps-grid button.on { border-color: var(--red); background: #fff; }
+.small { font-size: 12px; margin: 2px 0 6px; }

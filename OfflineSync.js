@@ -8,15 +8,19 @@
   // Defaults; Admin › Status Pin Inventory overrides label / colour / icon / menu / knock / contact / lock (meta 'statuses').
   // assigned_rep_email holds the rep key: a roster id (no emails in source) or an email that came in on a CSV.
   const DEFAULTS = [
-    ['NEW', 'Prospects (New)', 'New', '#2f80ed', '★', 1, 0, 0], ['NH1', 'Not Home 1', 'NH1', '#c9a227', '1', 1, 1, 0], ['NH2', 'Not Home 2', 'NH2', '#f2994a', '2', 1, 1, 0],
-    ['NH3', 'Not Home 3', 'NH3', '#e2703a', '3', 1, 1, 0], ['GB', 'Go Back', 'GB', '#9b51e0', '↺', 1, 1, 1], ['P_GB', 'Pitched – Go Back', 'P GB', '#bb6bd9', 'P', 1, 1, 1],
-    ['SOLD', 'Sold', 'SOLD', '#27ae60', '$', 1, 1, 1], ['NI', 'Not Interested', 'NI', '#eb5757', '✕', 1, 1, 1], ['APPT', 'Appointment', 'APPT', '#00a3a3', '◷', 1, 1, 1],
-    ['PVL', 'Possible Vacant Lot', 'PVL', '#a68a64', '▢', 1, 0, 0], ['CCI', 'CCI', 'CCI', '#2d9cdb', 'C', 0, 0, 0], ['CST', 'Existing Customer', 'Cust', '#1b5e20', '✓', 0, 0, 0]
+    ['NEW', 'Prospects (New)', 'New', '#58C322', '⌖', 1, 0, 0], ['NH1', 'Not Home 1', 'NH1', '#7cc4f5', '?', 1, 1, 0], ['NH2', 'Not Home 2', 'NH2', '#3a8fe0', '?', 1, 1, 0],
+    ['NH3', 'Not Home 3', 'NH3', '#1c4f9c', '?', 1, 1, 0], ['GB', 'Go Back', 'GB', '#ff5fa2', '↺', 1, 1, 1], ['P_GB', 'Pitched – Go Back', 'P GB', '#f2b705', '🔒', 1, 1, 1],
+    ['SOLD', 'Sold', 'SOLD', '#1e8e3e', '$', 1, 1, 1], ['NI', 'Not Interested', 'NI', '#e53935', '✕', 1, 1, 1], ['APPT', 'Appointment', 'APPT', '#00a3a3', '◷', 1, 1, 1],
+    ['PVL', 'Possible Vacant Lot', 'PVL', '#a68a64', '▢', 1, 0, 0], ['CCI', 'CCI', 'CCI', '#2d9cdb', 'C', 0, 0, 0], ['CST', 'Existing Customer', 'Cust', '#2350d8', '✓', 0, 0, 0]
   ].map(a => ({ code: a[0], label: a[1], short: a[2], color: a[3], icon: a[4], menu: a[5], knock: a[6], contact: a[7], lock: 0, ring: a[0] === 'CST' ? 1 : 0 }));
   const STATUS = DEFAULTS.map(s => Object.assign({}, s)), BY_CODE = {};
   const ALIAS = { 'P GB': 'P_GB', PGB: 'P_GB', PROSPECT: 'NEW', CCI_PROSPECT: 'CCI', CUSTOMER: 'CST', EXISTING_CUSTOMER: 'CST', 'EXISTING CUSTOMER': 'CST' };
   function applyStatuses(over) {
-    STATUS.forEach((s, i) => { Object.assign(s, DEFAULTS[i], (over || {})[s.code] || {}); BY_CODE[s.code] = s; });
+    over = over || {}; STATUS.length = 0; Object.keys(BY_CODE).forEach(k => delete BY_CODE[k]);
+    DEFAULTS.forEach(d => STATUS.push(Object.assign({}, d, over[d.code] || {}, { code: d.code })));
+    Object.keys(over).filter(k => over[k] && over[k].custom && !DEFAULTS.some(d => d.code === k))                  // Admin-created statuses (v2.1)
+      .forEach(k => STATUS.push(Object.assign({ label: k, short: k, color: '#888888', icon: '★', menu: 1, knock: 1, contact: 0, lock: 0, ring: 0 }, over[k], { code: k })));
+    STATUS.forEach(s => { BY_CODE[s.code] = s; });
     DF.bus.emit('statuses:changed');
   }
   applyStatuses();

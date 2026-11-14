@@ -57,23 +57,25 @@
   // ---- Status Pin Inventory ----
   const FLAGS = [['menu', 'Menu'], ['knock', 'Knock'], ['contact', 'Contact'], ['lock', 'Soft-lock']];
   function renderInventory() {
-    $('#inv-body').innerHTML = DF.sync.STATUS.map(s => '<tr data-code="' + s.code + '"><td><span class="status-chip chip-' + s.code + '">' + DF.esc(s.icon) + ' ' + DF.esc(s.short) + '</span></td>' +
+    $('#inv-body').innerHTML = DF.sync.STATUS.map(s => '<tr data-code="' + s.code + '"><td><button type="button" class="pin-pv" aria-label="Edit ' + DF.esc(s.label) + ' pin"><img alt="" src="' + DF.pins.pinUrl(s, '#ffffff') +
+      '"></button> <span class="status-chip chip-' + s.code + '">' + DF.esc(s.short) + '</span></td>' +
       '<td><input class="i-label" value="' + DF.esc(s.label) + '" maxlength="30"></td><td><input class="i-icon" value="' + DF.esc(s.icon) + '" maxlength="2"></td><td><input class="i-color" type="color" value="' + (COLOR.test(s.color) ? s.color : '#888888') + '"></td>' +
       FLAGS.map(f => '<td><input type="checkbox" class="i-' + f[0] + '"' + (s[f[0]] ? ' checked' : '') + (f[0] === 'lock' && s.code === 'SOLD' ? ' disabled title="SOLD is never locked"' : '') + '></td>').join('') + '</tr>').join('');
   }
   async function saveInventory() {
-    if (!DF.isOwner()) return null;
+    if (!DF.isManager()) return null;
     const over = {};
     DF.$$('#inv-body tr').forEach(tr => {
-      const code = tr.dataset.code, d = DF.sync.DEFAULTS.find(x => x.code === code), v = { label: DF.$('.i-label', tr).value.trim() || d.label, icon: DF.$('.i-icon', tr).value.trim() || d.icon,
+      const code = tr.dataset.code, cur = DF.sync.BY_CODE[code], d = DF.sync.DEFAULTS.find(x => x.code === code) || cur, v = { label: DF.$('.i-label', tr).value.trim() || d.label, icon: DF.$('.i-icon', tr).value.trim() || d.icon,
         color: COLOR.test(DF.$('.i-color', tr).value) ? DF.$('.i-color', tr).value : d.color };
       FLAGS.forEach(f => { v[f[0]] = DF.$('.i-' + f[0], tr).checked ? 1 : 0; });
       if (code === 'SOLD') v.lock = 0;                                    // owner rule: SOLD stays editable / resettable
+      if (cur && cur.custom) { over[code] = Object.assign({ custom: 1, short: cur.short, ring: 0 }, v); return; }   // Admin-created status: keep it whole
       const diff = {}; Object.keys(v).forEach(k => { if (v[k] !== d[k]) diff[k] = v[k]; });
       if (Object.keys(diff).length) over[code] = diff;
     });
     await DF.sync.setMeta('statuses', over);
-    renderInventory(); DF.ringCss(); DF.toast('Status Pin Inventory saved');
+    renderInventory(); DF.ringCss(); DF.pins.paint(); DF.toast('Status Pin Inventory saved');
     return over;
   }
 
@@ -103,7 +105,7 @@
     $('#roster-form').addEventListener('submit', saveRep);
     $('#rf-cancel').addEventListener('click', () => { $('#roster-form').hidden = true; });
     $('#inv-save').addEventListener('click', saveInventory);
-    $('#inv-reset').addEventListener('click', async () => { if (!DF.isOwner()) return; await DF.sync.setMeta('statuses', {}); renderInventory(); DF.ringCss(); });
+    $('#inv-reset').addEventListener('click', async () => { if (!DF.isManager()) return; await DF.sync.setMeta('statuses', {}); renderInventory(); DF.ringCss(); });
     $('#sync-url-save').addEventListener('click', saveSyncUrl);
     $('#sync-url').addEventListener('input', () => { $('#sync-url').dataset.dirty = '1'; });
     $('#sync-now').addEventListener('click', () => DF.sync.flush().then(renderOutbox));

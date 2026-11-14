@@ -27,6 +27,7 @@
   <script src="StatsView.js" defer></script>
   <script src="LeadImport.js" defer></script>
   <script src="AdminPanel.js" defer></script>
+  <script src="PinStudio.js" defer></script>
 </head>
 <body>
 <main id="app">
@@ -124,8 +125,17 @@
         <div id="rf-camps" class="camp-list"></div>
         <div class="pv-actions"><button type="button" class="btn" id="rf-cancel">Cancel</button><button type="submit" class="btn primary">Save</button></div>
       </form>
+    </div>
+    <div class="manager-only">
       <h3>Status Pin Inventory <button type="button" class="btn" id="inv-reset">Reset</button> <button type="button" class="btn primary" id="inv-save">Save</button></h3>
+      <p class="muted small">Tap a pin to change its icon or colour (saves instantly).</p>
       <div class="pv-scroll"><table class="grid"><thead><tr><th>Pin</th><th>Label</th><th>Icon</th><th>Colour</th><th>Menu</th><th>Knock</th><th>Contact</th><th>Soft-lock</th></tr></thead><tbody id="inv-body"></tbody></table></div>
+      <div id="pin-studio" class="pin-studio" hidden>
+        <div class="ps-head"><img id="ps-preview" class="ps-pin" alt="Pin preview"><img id="ps-preview-rep" class="ps-pin" alt="Pin preview with a rep ring"><b id="ps-title"></b><button type="button" class="x" id="ps-close" aria-label="Close pin editor">✕</button></div>
+        <div id="ps-icons" class="ps-grid"></div>
+        <div id="ps-swatches" class="ps-grid ps-sw"></div>
+      </div>
+      <div class="filters"><input id="ns-name" placeholder="New status (e.g. Callback)" maxlength="24"><button type="button" class="btn primary" id="ns-add">+ Add Status</button></div>
     </div>
     <p class="muted" id="app-version"></p>
   </section>

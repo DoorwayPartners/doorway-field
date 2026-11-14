@@ -27,16 +27,16 @@ const guardrails = () => require('./scan_secrets_csp.js').scan(ok);
     }
     const cl = await page.evaluate(async () => {
       const m = DF.map.instance; m.jumpTo({ center: [-70.7755, 43.4380], zoom: 11 }); await new Promise(r => m.once('idle', r));
-      const c = m.querySourceFeatures('leads').filter(f => f.properties.cluster), drawn = m.queryRenderedFeatures({ layers: ['clusters'] }).length;
+      const c = m.querySourceFeatures('leads').filter(f => f.properties.cluster), drawn = m.queryRenderedFeatures({ layers: ['clusters'] }).length, clImgs = m.listImages().filter(i => /^cl-/.test(i));
       m.jumpTo({ center: [-70.7745, 43.4380], zoom: 12.6 }); await new Promise(r => m.once('idle', r));
       return { max: Math.max(0, ...c.map(f => f.properties.point_count)), n: c.length, drawn, hi: m.querySourceFeatures('leads').filter(f => f.properties.cluster).length,
-        pins: m.queryRenderedFeatures({ layers: ['pins'] }).length, cfg: DF.map.CLUSTER, label: m.getLayoutProperty('clusters', 'icon-image'), radius: [2, 5, 15, 75, 400].map(DF.map.clusterRadius),
-        icons: DF.sync.STATUS.every(s => m.hasImage('pin-' + s.code)), ring: m.getLayer('pin-ring').type };
+        pins: m.queryRenderedFeatures({ layers: ['pins'] }).length, cfg: DF.map.CLUSTER, label: m.getLayoutProperty('clusters', 'icon-image'), radius: [2, 5, 15, 75, 400].map(DF.map.clusterRadius), clImgs,
+        icons: m.listImages().filter(i => /^pin-[A-Z0-9_]+\|#[0-9a-f]{6}$/i.test(i)).length, size: JSON.stringify(m.getLayoutProperty('pins', 'icon-size')), ring: m.getLayer('pin-stack').type };
     });
     ok(cl.n >= 1 && cl.max >= 15 && cl.drawn >= 1, 'town zoom 11: numbered cluster bubbles, no font download (largest ≥ 15)', cl);
     ok(cl.hi === 0 && cl.pins > 10 && cl.cfg.maxZoom === 11 && cl.cfg.radius === 24, 'zoom 12+: individual circular pins (24 px clustering at town zoom)', cl);
-    ok(JSON.stringify(cl.label).includes('75+') && cl.radius.join() === '15,19,24,31,31', 'cluster buckets 2 | 5 | 15 | 75+ with a 75+ label');
-    ok(cl.icons && cl.ring === 'circle', 'circular pin icon for every status + outer ring layer');
+    ok(JSON.stringify(cl.label).includes('1k+') && !JSON.stringify(cl.label).includes('75+') && cl.radius.every(r => r === 17) && cl.clImgs.some(i => i.endsWith('-' + cl.max)), 'clusters: one 34 px badge with the EXACT count (1k+ only at 1000+)', cl.clImgs);
+    ok(cl.icons >= 1 && cl.size === JSON.stringify(['step', ['zoom'], 32 / 34, 15, 1]) && cl.ring === 'circle', '34 px dual-ring pin images (32 px below zoom 15) + stacked-disc edge layer', cl);
     ok((await page.$$eval('#lead-menu .dispo', b => b.map(x => x.dataset.code))).join() === MENU.join(), 'Lead Menu = the 10 menu codes, in order');
     const attr = await page.evaluate(() => DF.$('.maplibregl-ctrl-attrib').textContent);
     ok(/Esri/.test(attr) && /OpenStreetMap/.test(attr), 'attribution badge visible (Esri + OpenStreetMap)');
@@ -101,7 +101,7 @@ const guardrails = () => require('./scan_secrets_csp.js').scan(ok);
     for (const m of ['satellite', 'street', 'hybrid']) {
       await page.click('#pill-layers'); await page.click('.mode-card[data-mode=' + m + ']');
       await page.waitForFunction(x => DF.map.ready && DF.map.mode === x, m, { timeout: 15000 });
-      const s = await page.evaluate(() => { const st = DF.map.instance.getStyle(); return { img: !!st.sources.imagery, omt: !!st.sources.omt, leads: !!st.sources.leads, ring: !!DF.map.instance.getLayer('pin-ring') }; });
+      const s = await page.evaluate(() => { const st = DF.map.instance.getStyle(); return { img: !!st.sources.imagery, omt: !!st.sources.omt, leads: !!st.sources.leads, ring: !!DF.map.instance.getLayer('pin-stack') }; });
       ok((m === 'street' ? !s.img : m === 'satellite' ? s.img && !s.omt : s.img && s.omt) && s.leads && s.ring, 'Map Settings › ' + m + ' (pins + rings re-added)', s);
     }
     await page.click('#pill-gps'); ok(await page.evaluate(() => DF.tools.following), 'Recenter GPS starts Follow Me');

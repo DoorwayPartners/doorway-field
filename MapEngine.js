@@ -1,4 +1,4 @@
-// Doorway Field v2.0 — MapEngine: MapLibre GL JS, $0 tiles (Esri/USGS imagery + OpenFreeMap vectors), canvas cluster bubbles,
+// Doorway Field v2.1 — MapEngine: MapLibre GL JS, $0 tiles (Esri/USGS imagery + OpenFreeMap vectors), exact-count 34 px cluster badges, stacked-disc multi-unit edges,
 // dual-ring circular pins (inner disc + icon = disposition; outer ring = rep colour on Owner/Manager view, white for Agents / Unassigned),
 // Existing Customer = white centre + coloured ring, selection via feature-state, temporary lasso + numbered route layers.
 (function () {
@@ -6,10 +6,11 @@
   const DF = window.DF;
   let map = null, mode = 'hybrid';
   const selected = new Set();
-  const CLUSTER_LABEL = ['case', ['>=', ['get', 'point_count'], 75], '75+', ['to-string', ['get', 'point_count']]];
+  const CLUSTER_LABEL = ['case', ['>=', ['get', 'point_count'], 1000], '1k+', ['to-string', ['get', 'point_count']]];   // exact count up to 999
   const CLUSTER_ICON = ['concat', 'cl-', ['case', ['==', ['get', 'nnew'], ['get', 'point_count']], 'n', 'm'], '-', CLUSTER_LABEL];
-  const CLUSTER_RING = { color: '#ffffff', width: 3 };
-  const clusterRadius = n => n >= 75 ? 31 : n >= 15 ? 24 : n >= 5 ? 19 : 15;          // buckets 2 | 5 | 15 | 75+
+  const CLUSTER_RING = { color: '#ffffff', width: 2.5 }, CLUSTER_SIZE = 34, MIXED = '#2c3e50';
+  const clusterRadius = () => CLUSTER_SIZE / 2;          // one 34 px badge for every count: roads stay visible when zoomed out
+  const PIN_SIZE = ['step', ['zoom'], 32 / 34, 15, 1];   // 32 px at zoom 12.5-14, 34 px at 15+
   const CLUSTER = { maxZoom: 11, radius: 24 };   // individual pins from zoom 12 (MapLibre switches cluster tiles at whole zooms; closest to the 12.5 spec), tight 24 px clustering below
   const WHITE = '#ffffff';
   const EMPTY = { type: 'FeatureCollection', features: [] };
@@ -37,43 +38,60 @@
   // ---- canvas icons (no font downloads: work offline) ----
   function canvas(d, draw) { const c = document.createElement('canvas'); c.width = c.height = d * 2; const x = c.getContext('2d'); x.scale(2, 2); draw(x, d / 2); return x.getImageData(0, 0, d * 2, d * 2); }
   function text(x, t, c, color, px) { x.fillStyle = color; x.font = '700 ' + px + 'px Arial, Helvetica, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(t, c, c + 0.5); }
-  function pinImage(s) {          // inner disc 20 px: filled disc + white glyph, or (ring statuses) white centre + coloured ring + coloured glyph
-    return canvas(22, (x, c) => {
-      x.beginPath(); x.arc(c, c, 9.5, 0, Math.PI * 2);
-      if (s.ring) { x.fillStyle = WHITE; x.fill(); x.lineWidth = 3; x.strokeStyle = s.color; x.stroke(); text(x, s.icon, c, s.color, 10); }
-      else { x.fillStyle = s.color; x.fill(); text(x, s.icon, c, WHITE, s.icon.length > 1 ? 8 : 11); }
-    });
-  }
-  function clusterIcon(id) {      // 'cl-m-15' mixed (green) | 'cl-n-75+' all-new (blue)
-    const [, kind, label] = id.split('-'), r = clusterRadius(parseInt(label, 10)), d = (r + CLUSTER_RING.width + 1) * 2;
-    return canvas(d, (x, c) => { x.beginPath(); x.arc(c, c, r, 0, Math.PI * 2); x.fillStyle = kind === 'n' ? DF.sync.BY_CODE.NEW.color : '#27ae60'; x.fill();
-      x.lineWidth = CLUSTER_RING.width; x.strokeStyle = CLUSTER_RING.color; x.stroke(); text(x, label, c, WHITE, label.length > 2 ? 12 : 14); });
+  function clusterIcon(id) {      // 'cl-m-470' mixed (slate) | 'cl-n-14' all-new (New colour); 34 px incl. a 2.5 px white border
+    const [, kind, label] = id.split('-'), r = CLUSTER_SIZE / 2 - CLUSTER_RING.width / 2;
+    return canvas(CLUSTER_SIZE + 8, (x, c) => { x.save(); x.shadowColor = 'rgba(0,0,0,0.45)'; x.shadowBlur = 12; x.shadowOffsetY = 4;
+      x.beginPath(); x.arc(c, c, r, 0, Math.PI * 2); x.fillStyle = kind === 'n' ? DF.sync.BY_CODE.NEW.color : MIXED; x.fill(); x.restore();
+      x.lineWidth = CLUSTER_RING.width; x.strokeStyle = CLUSTER_RING.color; x.stroke(); text(x, label, c, WHITE, label.length > 3 ? 11 : label.length > 2 ? 12 : 14); });
   }
   const stopIcon = n => canvas(26, (x, c) => { x.beginPath(); x.arc(c, c, 11, 0, Math.PI * 2); x.fillStyle = '#1d1d1f'; x.fill(); x.lineWidth = 2; x.strokeStyle = WHITE; x.stroke(); text(x, String(n), c, WHITE, 11); });
-  function addIcons(force) {
-    DF.sync.STATUS.forEach(s => { const id = 'pin-' + s.code; if (map.hasImage(id)) { if (force) map.updateImage(id, pinImage(s)); } else map.addImage(id, pinImage(s), { pixelRatio: 2 }); });
+  // Pin images are made on demand per status + ring colour: 'pin-NEW|#ffffff'
+  function addPin(id) {
+    const [code, ring] = id.slice(4).split('|'), s = DF.sync.BY_CODE[code] || DF.sync.BY_CODE.NEW;
+    if (!map.hasImage(id)) map.addImage(id, DF.pins.pinImage(s, ring || WHITE), { pixelRatio: 2 });
   }
+  const dropPins = () => map.listImages().filter(id => /^pin-/.test(id)).forEach(id => map.removeImage(id));
 
   // ---- data: only leads that pass the active campaign + filter drawer ----
   const showRings = () => DF.isManager();
   const ringOf = r => showRings() && r.assigned_rep_email && DF.roster.get(r.assigned_rep_email) ? DF.roster.color(r.assigned_rep_email) : WHITE;
   const visible = r => DF.filters ? DF.filters.match(r) : DF.inCampaign(r);
+  // Multi-unit overlaps: 2-4 doors within 15 m get a stacked-disc edge in the group's dominant status colour (15 m grid, 3 x 3 lookup).
+  function stacks(rows) {
+    const out = {}; if (!rows.length) return out;
+    const LAT = 15 / 111320, LNG = LAT / Math.max(0.2, Math.cos(rows[0].lat * Math.PI / 180)), g = {}, done = new Set();
+    const cell = r => [Math.floor(r.lat / LAT), Math.floor(r.lng / LNG)], m = (a, b) => Math.hypot((a.lat - b.lat) / LAT, (a.lng - b.lng) / LNG) * 15;
+    rows.forEach(r => { const k = cell(r).join(':'); (g[k] = g[k] || []).push(r); });
+    rows.forEach(r => {
+      if (done.has(r.lead_id)) return;
+      const [a, b] = cell(r), near = [];
+      for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) (g[(a + i) + ':' + (b + j)] || []).forEach(o => { if (!done.has(o.lead_id) && m(r, o) <= 15) near.push(o); });
+      near.forEach(o => done.add(o.lead_id));
+      if (near.length < 2 || near.length > 4) return;
+      const n = {}; near.forEach(o => { n[o.status_code] = (n[o.status_code] || 0) + 1; });
+      const dom = Object.keys(n).sort((x, y) => n[y] - n[x])[0], c = (DF.sync.BY_CODE[dom] || DF.sync.BY_CODE.NEW).color;
+      near.forEach(o => { out[o.lead_id] = { n: near.length, c }; });
+    });
+    return out;
+  }
   function fc() {
-    return { type: 'FeatureCollection', features: DF.sync.all().filter(visible).map(r => ({ type: 'Feature',
-      geometry: { type: 'Point', coordinates: [r.lng, r.lat] }, properties: { lead_id: r.lead_id, status_code: r.status_code, ring: ringOf(r) } })) };
+    const rows = DF.sync.all().filter(visible), st = stacks(rows);
+    return { type: 'FeatureCollection', features: rows.map(r => ({ type: 'Feature', geometry: { type: 'Point', coordinates: [r.lng, r.lat] },
+      properties: Object.assign({ lead_id: r.lead_id, status_code: r.status_code, ring: ringOf(r) }, st[r.lead_id] ? { stk: st[r.lead_id].n, stkc: st[r.lead_id].c } : {}) })) };
   }
   function addLayers() {
-    addIcons();
     if (!map.getSource('leads')) {
       map.addSource('leads', { type: 'geojson', data: fc(), cluster: true, clusterRadius: CLUSTER.radius, clusterMaxZoom: CLUSTER.maxZoom, promoteId: 'lead_id',
         clusterProperties: { nnew: ['+', ['case', ['==', ['get', 'status_code'], 'NEW'], 1, 0]] } });
-      const unclustered = ['!', ['has', 'point_count']], size = ['interpolate', ['linear'], ['zoom'], 12.5, 0.75, 18, 1.15];
+      const unclustered = ['!', ['has', 'point_count']], edge = n => ({ 'circle-radius': ['step', ['zoom'], 16, 15, 17], 'circle-color': ['get', 'stkc'], 'circle-translate': [n, -n],
+        'circle-stroke-color': WHITE, 'circle-stroke-width': 1.5, 'circle-opacity': 0.95 });
       map.addLayer({ id: 'clusters', type: 'symbol', source: 'leads', filter: ['has', 'point_count'], layout: { 'icon-image': CLUSTER_ICON, 'icon-allow-overlap': true, 'icon-ignore-placement': true } });
-      map.addLayer({ id: 'pin-sel', type: 'circle', source: 'leads', filter: unclustered, paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 12.5, 12, 18, 18],
+      map.addLayer({ id: 'pin-stack2', type: 'circle', source: 'leads', filter: ['all', unclustered, ['>=', ['coalesce', ['get', 'stk'], 0], 3]], paint: edge(7) });
+      map.addLayer({ id: 'pin-stack', type: 'circle', source: 'leads', filter: ['all', unclustered, ['has', 'stk']], paint: edge(3.5) });
+      map.addLayer({ id: 'pin-sel', type: 'circle', source: 'leads', filter: unclustered, paint: { 'circle-radius': ['step', ['zoom'], 20, 15, 21],
         'circle-color': '#1d1d1f', 'circle-opacity': ['case', ['boolean', ['feature-state', 'sel'], false], 0.85, 0] } });
-      map.addLayer({ id: 'pin-ring', type: 'circle', source: 'leads', filter: unclustered, paint: { 'circle-radius': ['interpolate', ['linear'], ['zoom'], 12.5, 9.5, 18, 14.5],
-        'circle-color': ['get', 'ring'], 'circle-stroke-color': 'rgba(0,0,0,0.35)', 'circle-stroke-width': 0.6 } });
-      map.addLayer({ id: 'pins', type: 'symbol', source: 'leads', filter: unclustered, layout: { 'icon-image': ['concat', 'pin-', ['get', 'status_code']], 'icon-allow-overlap': true, 'icon-size': size } });
+      map.addLayer({ id: 'pins', type: 'symbol', source: 'leads', filter: unclustered, layout: { 'icon-image': ['concat', 'pin-', ['get', 'status_code'], '|', ['get', 'ring']],
+        'icon-allow-overlap': true, 'icon-ignore-placement': true, 'icon-size': PIN_SIZE } });
       map.addSource('lasso', { type: 'geojson', data: EMPTY });
       map.addLayer({ id: 'lasso-fill', type: 'fill', source: 'lasso', paint: { 'fill-color': '#e31b23', 'fill-opacity': 0.12 } });
       map.addLayer({ id: 'lasso-line', type: 'line', source: 'lasso', paint: { 'line-color': '#e31b23', 'line-width': 2.5, 'line-dasharray': [2, 1] } });
@@ -159,7 +177,7 @@
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
     map.on('style.load', addLayers);
     map.on('dragstart', () => { DF.map.moved = true; });
-    map.on('styleimagemissing', e => { if (/^cl-/.test(e.id)) map.addImage(e.id, clusterIcon(e.id), { pixelRatio: 2 }); else if (/^pin-/.test(e.id)) addIcons(); });
+    map.on('styleimagemissing', e => { if (/^cl-/.test(e.id)) map.addImage(e.id, clusterIcon(e.id), { pixelRatio: 2 }); else if (/^pin-/.test(e.id)) addPin(e.id); });
     map.once('load', () => {
       if (rows.length > 1 && !DF.map.moved) map.fitBounds(b, { padding: 60, maxZoom: 16, duration: 0 });   // never override a jump / pan made before tiles finished
       DF.$$('.maplibregl-ctrl-attrib').forEach(el => el.classList.add('maplibregl-compact-show', 'df-attrib'));   // credits badge always shown
@@ -172,7 +190,7 @@
     map.on('click', 'pins', e => { const id = e.features[0].properties.lead_id; if (!DF.tools.pinTap(id)) { select([id]); DF.bus.emit('pin:selected', id); } });
     map.on('click', e => { if (map.queryRenderedFeatures(e.point, { layers: ['pins', 'clusters'] }).length) return; if (!DF.tools.mapTap(e)) { select([]); DF.bus.emit('map:blank'); } });
     ['pins:changed', 'campaign:changed', 'filters:changed', 'roster:changed', 'auth:changed'].forEach(ev => DF.bus.on(ev, refresh));
-    DF.bus.on('statuses:changed', () => { DF.ringCss(); if (map && map.getSource('leads')) { addIcons(true); refresh(); } });
+    DF.bus.on('statuses:changed', () => { DF.ringCss(); if (map && map.getSource('leads')) { dropPins(); refresh(); } });
     DF.bus.on('tab:changed', t => { if (t === 'map' && map) setTimeout(() => map.resize(), 0); });
     DF.$$('.mode-card').forEach(c => c.classList.toggle('active', c.dataset.mode === mode));
     DF.map.instance = map;
@@ -180,5 +198,5 @@
   }
 
   DF.map = { init, setMode, setStatus, setRing, setProps, refresh, select, jumpTo, drawLasso, setRoute, buildStyle, fc, ringOf, visible,
-    CLUSTER, CLUSTER_LABEL, CLUSTER_ICON, CLUSTER_RING, clusterRadius, mode, ready: false, selected: () => Array.from(selected), instance: null };
+    CLUSTER, CLUSTER_LABEL, CLUSTER_ICON, CLUSTER_RING, CLUSTER_SIZE, PIN_SIZE, clusterRadius, stacks, mode, ready: false, selected: () => Array.from(selected), instance: null };
 })();

@@ -121,7 +121,7 @@
       catch (e) { console.error('[DF] fixture', e); }
     }
     await signIn();
-    ['card', 'filters', 'list', 'stats', 'lasso', 'imports', 'admin'].forEach(m => DF[m] && DF[m].init && DF[m].init());
+    ['card', 'filters', 'list', 'stats', 'lasso', 'imports', 'admin', 'pins'].forEach(m => DF[m] && DF[m].init && DF[m].init());
     DF.map.init('map');
     DF.tools.init();
     DF.sync.startAuto();
