@@ -1,0 +1,12 @@
+{
+  "name": "Doorway Field",
+  "short_name": "Field",
+  "description": "Doorway Partners door-to-door field map",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#e31b23",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

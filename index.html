@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+  <meta name="theme-color" content="#e31b23">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Doorway Field</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" defer></script>
+  <script src="config.js" defer></script>
+  <script src="app.js" defer></script>
+  <script src="OfflineSync.js" defer></script>
+  <script src="MapEngine.js" defer></script>
+  <script src="BottomCard.js" defer></script>
+  <script src="TurfAdmin.js" defer></script>
+</head>
+<body>
+<main id="app">
+  <!-- MAP -->
+  <section id="view-map" class="view active" aria-label="Map">
+    <div id="map"></div>
+    <header class="topbar"><span class="brand">Doorway<b>Field</b></span><span id="sync-state" class="sync">offline</span><span id="sync-queue" class="queue"></span><span id="me-name" class="me"></span></header>
+    <div class="pills left">
+      <button type="button" class="pill" id="pill-search" aria-label="Search">⌕</button>
+      <button type="button" class="pill" id="pill-lasso" aria-label="Lasso area select">⬠</button>
+      <button type="button" class="pill" id="pill-multi" aria-label="Multi-select">☑</button>
+    </div>
+    <div class="pills right">
+      <button type="button" class="pill" id="pill-layers" aria-label="Map layers">◫</button>
+      <button type="button" class="pill" id="pill-drop" aria-label="Drop pin">⊕</button>
+      <button type="button" class="pill" id="pill-compass" aria-label="Compass: reset north">N</button>
+      <button type="button" class="pill gps" id="pill-gps" aria-label="Recenter and follow me">◎</button>
+    </div>
+    <div id="search-bar" class="floatbar"><input id="search-input" type="search" placeholder="Search address or name" autocomplete="off"><ul id="search-results"></ul></div>
+    <div id="lasso-bar" class="floatbar actionbar"><span id="lasso-count">0 corners</span><button type="button" class="btn" id="lasso-cancel">Cancel</button><button type="button" class="btn primary" id="lasso-done">Done</button></div>
+    <div id="sel-bar" class="floatbar actionbar"><span id="sel-count">0 selected</span><button type="button" class="btn" id="sel-clear">Clear</button><button type="button" class="btn primary" id="sel-status">Set status</button></div>
+
+    <article id="card" class="card" aria-live="polite">
+      <div class="grab"></div>
+      <div class="card-head">
+        <div><h2 id="card-name">Homeowner</h2><span id="card-status" class="status-chip">Prospects (New)</span></div>
+        <div class="card-head-actions"><button type="button" class="pill-outline" id="card-details">Details</button><button type="button" class="x" id="card-close" aria-label="Close">×</button></div>
+      </div>
+      <p id="card-address" class="address"></p>
+      <p id="card-appt" class="appt"></p>
+      <p id="card-intel" class="intel"></p>
+      <div id="lead-menu" class="lead-menu" role="toolbar" aria-label="Lead Menu"></div>
+      <div class="card-actions"><button type="button" class="btn" id="card-appt-btn">Appointment</button><button type="button" class="btn" id="card-forms-btn">Forms</button></div>
+      <form id="card-note-form" class="note-bar"><label for="card-note">NOTES</label><input id="card-note" maxlength="500" placeholder="Add a note..."><button class="btn" type="submit">Save</button></form>
+    </article>
+  </section>
+
+  <!-- LIST -->
+  <section id="view-list" class="view" aria-label="List">
+    <header class="viewhead"><h1>Doors near you</h1><p class="muted">Sorted by straight-line distance</p></header>
+    <div class="filters"><input id="list-search" type="search" placeholder="Search"><select id="list-filter" aria-label="Status filter"></select></div>
+    <ul id="list-items" class="list"></ul>
+  </section>
+
+  <!-- STATS -->
+  <section id="view-stats" class="view" aria-label="Stats">
+    <header class="viewhead"><h1>Stats</h1></header>
+    <div class="ranges"><button type="button" class="range active" data-range="today">Today</button><button type="button" class="range" data-range="week">Week</button><button type="button" class="range" data-range="month">Month</button><button type="button" class="range" data-range="year">Year</button></div>
+    <h3>My Stats</h3>
+    <div class="tiles"><div class="tile"><b id="my-knocks">0</b><span>Knocks</span></div><div class="tile"><b id="my-sales">0</b><span>Sold</span></div><div class="tile"><b id="my-appts">0</b><span>Appts</span></div><div class="tile"><b id="my-close">0%</b><span>Close rate</span></div></div>
+    <h3>Leaderboard</h3>
+    <ol id="leaderboard" class="board"></ol>
+  </section>
+
+  <!-- ADMIN (owner only) -->
+  <section id="view-admin" class="view" aria-label="Admin">
+    <header class="viewhead"><h1>Turf Admin</h1><p class="muted">Owner only · every action is re-checked by the server</p></header>
+    <h3>Import leads (CSV)</h3>
+    <div id="drop-zone" class="drop-zone" role="button" tabindex="0">Drop a CSV here or tap to choose<small>Doorway schema, Tool #1 export, or raw address + lat + lng</small></div>
+    <input id="csv-input" type="file" accept=".csv,text/csv" hidden>
+    <div id="import-report" class="report"></div>
+    <h3>Create turf</h3>
+    <div class="turf-form"><input id="turf-name" placeholder="Turf name"><select id="turf-rep" aria-label="Assign rep"></select><button type="button" class="btn primary" id="turf-draw">Draw on map</button></div>
+    <h3>Live progress</h3>
+    <div id="turf-progress" class="progress"></div>
+    <p class="muted" id="app-version"></p>
+  </section>
+</main>
+
+<nav class="tabs" aria-label="Main">
+  <button type="button" class="tab active" data-tab="map"><i>⌖</i>Map</button>
+  <button type="button" class="tab" data-tab="list"><i>☰</i>List</button>
+  <button type="button" class="tab" data-tab="stats"><i>▮</i>Stats</button>
+  <button type="button" class="tab" data-tab="admin" id="tab-admin" hidden><i>⚙</i>Admin</button>
+</nav>
+
+<div id="layers-drawer" class="modal drawer" role="dialog" aria-label="Map Settings">
+  <div class="sheet">
+    <div class="sheet-head"><h2>Map Settings</h2><button type="button" class="x" data-close="layers-drawer" aria-label="Close">×</button></div>
+    <div class="mode-cards">
+      <button type="button" class="mode-card" data-mode="street"><span class="thumb thumb-street"></span>Street</button>
+      <button type="button" class="mode-card" data-mode="hybrid"><span class="thumb thumb-hybrid"></span>Hybrid</button>
+      <button type="button" class="mode-card" data-mode="satellite"><span class="thumb thumb-satellite"></span>Satellite</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-appt" class="modal" role="dialog" aria-label="Appointment">
+  <form id="appt-form" class="sheet"><div class="sheet-head"><h2>Appointment</h2><button type="button" class="x" data-close="modal-appt" aria-label="Close">×</button></div>
+    <label><span>Date and time</span><input id="appt-input" type="datetime-local" required></label>
+    <button class="btn primary wide" type="submit">Save appointment</button></form>
+</div>
+
+<div id="modal-forms" class="modal" role="dialog" aria-label="SOLD order">
+  <form id="forms-form" class="sheet"><div class="sheet-head"><h2>SOLD order</h2><button type="button" class="x" data-close="modal-forms" aria-label="Close">×</button></div>
+    <div id="forms-fields"></div>
+    <button class="btn primary wide" type="submit">Save SOLD</button></form>
+</div>
+
+<div id="details" class="modal full" role="dialog" aria-label="Details">
+  <div class="sheet">
+    <div class="sheet-head"><h2 id="details-title">Details</h2><button type="button" class="x" data-close="details" aria-label="Close">×</button></div>
+    <div class="dtabs"><button type="button" class="dtab active" data-dtab="info">Info</button><button type="button" class="dtab" data-dtab="notes">Notes</button><button type="button" class="dtab" data-dtab="activity">Activity</button></div>
+    <div id="details-body" class="details-body"></div>
+  </div>
+</div>
+
+<div id="modal-signin" class="modal" role="dialog" aria-label="Sign in">
+  <form id="signin-form" class="sheet"><div class="sheet-head"><h2>Sign in</h2></div>
+    <label><span>Work email</span><input id="signin-email" type="email" autocomplete="email" required></label>
+    <button class="btn primary wide" type="submit">Continue</button></form>
+</div>
+
+<div id="toast" class="toast" role="status"><span id="toast-msg"></span><button type="button" id="toast-action" hidden></button></div>
+</body>
+</html>
