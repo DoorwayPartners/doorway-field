@@ -4,8 +4,10 @@
 window.DF_CONFIG = (function () {
   const ENV_KEYS = ['API_URL', 'ORG_ID', 'BASEMAP', 'IMAGERY'], src = window.DF_ENV || {}, env = {};
   ENV_KEYS.forEach(k => { if (typeof src[k] === 'string') env[k] = src[k]; });   // whitelist: config.env.js can never inject a roster
+  // v2.4.5: remember the last live Sync URL, so a missing / uncached config.env.js (offline PWA open, SW update) never drops the phone to local-only
+  try { if (env.API_URL) localStorage.setItem('df.env_api', env.API_URL); else { const last = localStorage.getItem('df.env_api'); if (/^https:\/\//.test(last || '')) env.API_URL = last; } } catch (e) { /* private mode */ }
   return Object.assign({
-  VERSION: '2.4.4',
+  VERSION: '2.4.5',
   ORG_ID: 'doorway',
   API_URL: '',                 // stays blank here: the live Sync URL lives in config.env.js. Admin › Sync Outbox can also set one per device
   FIXTURE_URL: '',             // tests/dev only

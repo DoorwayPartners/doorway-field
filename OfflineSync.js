@@ -142,7 +142,8 @@
   // ---- flush: text/plain POST (no CORS preflight for Apps Script), idempotent on event_id ----
   const syncUrl = () => meta.sync_url || DF.cfg.API_URL;
   async function flush(opts) {
-    if (flushing || !syncUrl() || navigator.onLine === false) { DF.bus.emit('sync:state', queue.size ? 'pending' : 'local'); return { skipped: true }; }
+    if (flushing) return { skipped: true };
+    if (!syncUrl() || navigator.onLine === false) { DF.bus.emit('sync:state', !syncUrl() ? 'local' : queue.size ? 'pending' : 'offline'); return { skipped: true }; }   // 'local' = no Sync URL at all, never just offline
     flushing = true; DF.bus.emit('sync:state', 'syncing');
     const batch = Array.from(queue.values()).slice(0, 200);
     try {
@@ -173,6 +174,7 @@
     window.addEventListener('offline', () => DF.bus.emit('sync:state', 'offline'));
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') { if (queue.size) flush({ hidden: true }); } else flush(); });
     window.addEventListener('focus', () => flush());
+    window.addEventListener('pageshow', e => { if (e.persisted) flush(); });   // PWA resumed from the back-forward cache: pull + push at once
     setInterval(flush, DF.cfg.FLUSH_EVERY_MS);
     flush();
   }

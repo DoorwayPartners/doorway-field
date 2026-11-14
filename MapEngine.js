@@ -24,7 +24,7 @@
   // Basemap chain (v2.4.4): DF.map.base = 'esri' (default) | 'google' | 'osm' (OpenFreeMap street vectors, OSM data). On tile failure → next.
   const NEXT = { google: 'esri', esri: 'osm', osm: 'esri' }, NAMES = { google: 'Google', esri: 'Esri imagery', osm: 'OpenStreetMap street map' };
   const APP_SRC = { leads: 1, lasso: 1, route: 1, me: 1, turfs: 1 };
-  const base = () => DF.map.base || (DF.map.base = ['google', 'esri', 'osm'].includes(DF.cfg.BASEMAP) ? DF.cfg.BASEMAP : 'esri');
+  const base = () => DF.map.base || (DF.map.base = [DF.store.get('basemap', ''), DF.cfg.BASEMAP].find(k => ['google', 'esri', 'osm'].includes(k)) || 'esri');   // rep's pick wins
   function buildStyle(m) {
     const t = DF.cfg.TILES, b = base();
     if (b === 'google') {                                                  // Google Hybrid (labels, borders, shields) | Street | Satellite
@@ -172,12 +172,20 @@
   }
 
   // ---- map modes (Map Settings drawer) ----
+  // ---- zero-blank-map watchdog: the primary basemap source must draw a tile. Google: 2.5 s (Android PWA blank-white guard); others 8 s; or 3 errors ----
+  let tileErr = 0, ok = {}, swaps = 0, dog = null;
+  const primary = () => { const src = Object.keys(((map && map.getStyle && map.getStyle()) || {}).sources || {}).filter(id => !APP_SRC[id]); return src.includes('imagery') ? 'imagery' : src[0]; };
+  function swap() { if (swaps >= 2) return; swaps++; DF.map.base = NEXT[base()]; DF.map.fallback = true; DF.toast('Map tiles unavailable: switched to ' + NAMES[DF.map.base]); setMode(DF.map.base === 'osm' ? 'street' : mode === 'street' ? 'hybrid' : mode); }
+  function arm() { tileErr = 0; ok = {}; clearTimeout(dog); dog = setTimeout(() => { const p = primary(); if (p && !ok[p]) swap(); }, base() === 'google' ? (DF.cfg.TILE_WATCHDOG_MS || 2500) : 8000); }
+  // ---- 1-tap basemap switcher (Hybrid ▾): Google Hybrid | Esri Satellite (imagery + road / place labels) | Street (OSM) ----
   const LABEL = { hybrid: 'Hybrid', street: 'Street', satellite: 'Satellite' };
-  const label = m => { const b = DF.$('#pill-layers'); if (b) b.textContent = LABEL[m] + ' ▾'; };
+  const choice = m => base() === 'osm' || m === 'street' ? 'osm' : base();
+  const label = m => { const b = DF.$('#pill-layers'); if (b) b.textContent = (choice(m) === 'osm' ? 'Street' : choice(m) === 'esri' ? 'Esri' : LABEL[m]) + ' ▾';
+    DF.$$('#basemap-menu button').forEach(x => x.classList.toggle('on', x.dataset.b === choice(m))); };
+  function setBasemap(k) { if (!NEXT[k]) return; DF.map.base = k; DF.store.set('basemap', k); swaps = 0; setMode(k === 'osm' ? 'street' : 'hybrid'); }
   function setMode(m) {
     if (!['street', 'hybrid', 'satellite'].includes(m)) return;
     mode = DF.map.mode = m; DF.store.set('mapMode', m); DF.map.ready = false; label(m);
-    DF.$$('.mode-card').forEach(c => c.classList.toggle('active', c.dataset.mode === m));
     if (map) map.setStyle(buildStyle(m), { diff: false });   // full swap so style.load re-adds pins
   }
 
@@ -192,14 +200,10 @@
     map.touchZoomRotate.enableRotation(); map.keyboard.enableRotation();
     map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-left');
     map.on('style.load', addLayers);
-    // Zero-blank-map: the primary basemap source must deliver a tile. 3 tile errors first, or nothing within 8 s (403 / 429 / blocked) → next basemap.
-    let tileErr = 0, ok = {}, swaps = 0, dog = null;
-    const primary = () => { const src = Object.keys(((map.getStyle && map.getStyle()) || {}).sources || {}).filter(id => !APP_SRC[id]); return src.includes('imagery') ? 'imagery' : src[0]; };
-    const swap = () => { if (swaps >= 2) return; swaps++; DF.map.base = NEXT[base()]; DF.map.fallback = true; DF.toast('Map tiles unavailable: switched to ' + NAMES[DF.map.base]); setMode(mode); };
-    const arm = () => { tileErr = 0; ok = {}; clearTimeout(dog); dog = setTimeout(() => { const p = primary(); if (p && !ok[p]) swap(); }, 8000); };
     map.on('style.load', arm);
     map.on('sourcedata', e => { if (e.sourceId && e.tile && !APP_SRC[e.sourceId]) ok[e.sourceId] = true; });
     map.on('error', e => { const p = primary(); if (!e.sourceId || e.sourceId !== p || ok[p] || ++tileErr < 3) return; swap(); });
+    map.on('idle', () => { const p = primary(); if (p && !ok[p] && tileErr > 0) swap(); });            // everything settled, tiles failed, nothing drawn
     map.on('dragstart', () => { DF.map.moved = true; });
     map.on('styleimagemissing', e => { if (/^cl-/.test(e.id)) map.addImage(e.id, clusterIcon(e.id), { pixelRatio: 2 }); else if (/^pin-/.test(e.id)) addPin(e.id); });
     map.once('load', () => {
@@ -216,11 +220,10 @@
     ['pins:changed', 'campaign:changed', 'filters:changed', 'roster:changed', 'auth:changed'].forEach(ev => DF.bus.on(ev, refresh));
     DF.bus.on('statuses:changed', () => { DF.ringCss(); if (map && map.getSource('leads')) { dropPins(); refresh(); } });
     DF.bus.on('tab:changed', t => { if (t === 'map' && map) setTimeout(() => map.resize(), 0); });
-    DF.$$('.mode-card').forEach(c => c.classList.toggle('active', c.dataset.mode === mode));
     DF.map.instance = map;  // CLUSTER settings, cluster images + pin taps are unchanged from v2.1
     renderLegend();
   }
 
-  DF.map = { init, setMode, setStatus, setRing, setProps, refresh, select, jumpTo, drawLasso, setRoute, buildStyle, fc, ringOf, visible,
+  DF.map = { init, setMode, setBasemap, setStatus, setRing, setProps, refresh, select, jumpTo, drawLasso, setRoute, buildStyle, fc, ringOf, visible,
     CLUSTER, CLUSTER_LABEL, CLUSTER_ICON, CLUSTER_RING, CLUSTER_SIZE, PIN_SIZE, clusterRadius, stacks, mode, ready: false, selected: () => Array.from(selected), instance: null };
 })();

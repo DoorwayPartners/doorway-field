@@ -141,3 +141,5 @@ h3 .btn { text-transform: none; letter-spacing: 0; padding: 4px 10px; font-size:
 .card-head > div:first-child { min-width: 0; flex: 1; } .card-head h2, .card-head .status-chip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; display: block; }
 .card-head .status-chip { display: inline-block; } .card-head-actions { gap: 6px; flex-shrink: 0; } .card-head-actions .icon-btn { width: 30px; height: 30px; font-size: 14px; margin-right: 0; }
 .card-head-actions .pill-outline { padding: 4px 10px; font-size: 13px; } .card-actions .btn { white-space: nowrap; padding: 7px 4px; font-size: 13px; }
+.basemap-menu { position: absolute; right: 12px; top: calc(156px + var(--safe-t)); z-index: 9; display: none; flex-direction: column; background: #fff; border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; min-width: 160px; }
+.basemap-menu.open { display: flex; } .basemap-menu button { border: 0; background: none; padding: 12px 14px; text-align: left; font-weight: 600; font-size: 15px; } .basemap-menu button.on { background: var(--soft); color: var(--red); }

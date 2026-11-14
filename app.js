@@ -149,7 +149,9 @@
         DF.$('#signin-id-row').hidden = !other; DF.$('#signin-pin-row').hidden = !(other || r); DF.$('#signin-pin-label').textContent = r && !r.pin && inv && r.id === inv.id ? 'Set your PIN (4-8 digits)' : 'PIN'; };
       sel.onchange = showPin; showPin();
       DF.openModal('modal-signin');
-      const done = (id, after) => { DF.closeModal('modal-signin'); setUser(id); DF.setCampaign(DF.defaultCampaign(DF.roster.get(id))); if (after) after(); resolve(); };
+      const done = async (id, after) => { DF.closeModal('modal-signin'); setUser(id); DF.setCampaign(DF.defaultCampaign(DF.roster.get(id)));
+        if (after) await Promise.race([Promise.resolve(after()), new Promise(r => setTimeout(r, 4000))]);   // session first, so the first auto-sync after sign-in is authorized
+        resolve(); };
       DF.$('#signin-form').onsubmit = async e => {
         e.preventDefault();
         const pin = DF.$('#signin-pin').value.trim();

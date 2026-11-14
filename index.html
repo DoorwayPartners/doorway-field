@@ -44,6 +44,7 @@
       <span id="sync-state" class="sync">local</span><span id="sync-queue" class="queue"></span><button type="button" id="me-name" class="me"></button>
     </header>
     <div id="ring-legend" class="ring-legend" hidden></div>
+    <div id="basemap-menu" class="basemap-menu" role="menu"><button type="button" data-b="google">Google Hybrid</button><button type="button" data-b="esri">Esri Satellite</button><button type="button" data-b="osm">Street (OSM)</button></div>
     <div id="install-banner" class="install-banner" hidden><span id="install-text">Install the Doorway Field app</span><button type="button" class="btn primary" id="install-go">Install</button><button type="button" class="x" id="install-x" aria-label="Dismiss install banner">×</button></div>
     <div class="pills left">
       <button type="button" class="pill" id="pill-filter" aria-label="Filters">⚟<b id="filter-badge" class="badge" hidden></b></button>
@@ -53,7 +54,7 @@
       <button type="button" class="pill" id="pill-stamp" aria-label="Rapid-Stamp mode">⚡</button>
     </div>
     <div class="pills right">
-      <button type="button" class="pill mode-pill" id="pill-layers" aria-label="Map layers">Hybrid ▾</button>
+      <button type="button" class="pill mode-pill" id="pill-layers" aria-label="Basemap: Google Hybrid, Esri Satellite or Street">Hybrid ▾</button>
       <button type="button" class="pill" id="pill-drop" aria-label="Drop pin">⊕</button>
       <button type="button" class="pill" id="pill-compass" aria-label="Compass: reset north">N</button>
       <button type="button" class="pill gps" id="pill-gps" aria-label="Recenter and follow me">◎</button>
@@ -158,11 +159,6 @@
   <button type="button" class="tab" data-tab="stats"><i>▮</i>Stats</button>
   <button type="button" class="tab" data-tab="admin" id="tab-admin" hidden><i>⚙</i>Admin</button>
 </nav>
-
-<div id="layers-drawer" class="modal drawer" role="dialog" aria-label="Map Settings"><div class="sheet">
-  <div class="sheet-head"><h2>Map Settings</h2><button type="button" class="x" data-close="layers-drawer" aria-label="Close">×</button></div>
-  <div class="mode-cards"><button type="button" class="mode-card" data-mode="street"><span class="thumb thumb-street"></span>Street</button><button type="button" class="mode-card" data-mode="hybrid"><span class="thumb thumb-hybrid"></span>Hybrid</button><button type="button" class="mode-card" data-mode="satellite"><span class="thumb thumb-satellite"></span>Satellite</button></div>
-</div></div>
 
 <div id="filter-drawer" class="modal drawer" role="dialog" aria-label="Filters"><div class="sheet">
   <div class="sheet-head"><h2>Filters</h2><span><button type="button" class="btn" id="filter-reset">Reset</button> <button type="button" class="x" data-close="filter-drawer" aria-label="Close">×</button></span></div>

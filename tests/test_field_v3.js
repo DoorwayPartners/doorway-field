@@ -2,7 +2,7 @@
 // Doorway Field — v2.4.4+ golden suite (field velocity): Prev / Next Door stepper, tap-to-copy address, Call / Text, header navigation,
 // Today's Scoreboard, Follow-Ups queue, SOLD order + Copy GroupMe Order, roster-name sign-in + default campaign. Shared harness: field_harness.js.
 const H = require('./field_harness.js');
-const { ok, newPage, ready, tap, OWNER } = H;
+const { ok, newPage, ready, tap, OWNER, api } = H;
 
 (async () => {
   const L = await H.launch();
@@ -68,11 +68,32 @@ const { ok, newPage, ready, tap, OWNER } = H;
       { id: 'agent-1', name: 'Rep Uno', role: 'Agent', team: 'Team 1', campaigns: ['Fidium'], defaultCampaign: 'Fidium', color: '#00a3a3' }] } });
     await nm.page.waitForSelector('#modal-signin.open');
     const opts = await nm.page.$$eval('#signin-name option', o => o.map(x => x.textContent + '=' + x.value).join('|'));
+    const posts0 = api.posts;
     await nm.page.selectOption('#signin-name', 'agent-1'); await nm.page.fill('#signin-pin', '1357'); await nm.page.click('#signin-form button'); await ready(nm.page);
+    await nm.page.waitForFunction(() => /synced/.test(DF.$('#sync-state').textContent), null, { timeout: 10000 }); const synced = api.posts > posts0;
     const st = await nm.page.evaluate(() => ({ id: DF.auth.id, camp: DF.campaign, pill: DF.$('#campaign-pill').textContent, sess: !!(DF.store.get('session') || {}).token }));
-    ok(opts === 'Cristian Coy=cristian-coy|Rep Uno=agent-1|Other rep: enter Rep ID=__id' && st.id === 'agent-1' && st.camp === 'Fidium' && /Fidium/.test(st.pill) && st.sess,
-      'sign-in lists full roster names (placeholder seats hidden): tap name + PIN (server-checked) → campaign pill set to the rep\'s default campaign', { opts, st });
+    ok(opts === 'Cristian Coy=cristian-coy|Rep Uno=agent-1|Other rep: enter Rep ID=__id' && st.id === 'agent-1' && st.camp === 'Fidium' && /Fidium/.test(st.pill) && st.sess && synced,
+      'sign-in lists full roster names (placeholder seats hidden): tap name + PIN (server-checked) → default campaign + immediate authorized sync', { opts, st, synced });
     await nm.context.close();
+
+    console.log('Stability (v2.4.5)');
+    const hg = await newPage(L.browser, L.base, { user: OWNER, hang: /mt\d\.google\.com/ }); await ready(hg.page); const t0 = Date.now();
+    await hg.page.waitForFunction(() => DF.map.base === 'esri' && DF.map.ready, null, { timeout: 9000 }).catch(() => {});
+    const hgs = await hg.page.evaluate(() => ({ base: DF.map.base, t: (DF.map.instance.getStyle().sources.imagery || {}).tiles + '', label: DF.$('#pill-layers').textContent })), secs = (Date.now() - t0) / 1000;
+    await hg.context.close();
+    ok(hgs.base === 'esri' && /World_Imagery/.test(hgs.t) && hgs.label === 'Esri ▾' && secs < 5, 'Google tiles that never render (no error, no tile) → Esri within ~2.5 s: the canvas never stays blank white', { hgs, secs });
+    const ep = await newPage(L.browser, L.base, { user: OWNER, noApi: true, env: { API_URL: 'https://api.test/exec' } }); await ready(ep.page);
+    await ep.page.waitForFunction(() => /synced/.test(DF.$('#sync-state').textContent), null, { timeout: 10000 });
+    const e1 = await ep.page.evaluate(() => ({ api: DF.cfg.API_URL, saved: localStorage.getItem('df.env_api') }));
+    await ep.context.unroute('**/config.env.js'); await ep.context.route('**/config.env.js', r => r.fulfill({ status: 404, body: '' }));
+    await ep.page.reload(); await ready(ep.page);
+    await ep.page.waitForFunction(() => /synced/.test(DF.$('#sync-state').textContent), null, { timeout: 10000 }).catch(() => {});
+    const e2 = await ep.page.evaluate(() => ({ api: DF.cfg.API_URL, state: DF.$('#sync-state').textContent }));
+    const vis = v => ep.page.evaluate(x => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => x }); document.dispatchEvent(new Event('visibilitychange')); }, v);
+    await vis('hidden'); const p1 = api.posts; await vis('visible'); await ep.page.waitForTimeout(700); const resumed = api.posts > p1;
+    await ep.context.close();
+    ok(e1.api === 'https://api.test/exec' && e1.saved === e1.api && e2.api === e1.api && /synced/.test(e2.state) && resumed,
+      'config.env.js URL remembered: a missing / uncached env file (offline PWA, SW update) keeps the live Sync URL, never "local"; foreground resume pulls + pushes at once', { e1, e2, resumed });
   } finally { await L.close(); }
   process.exit(H.report() ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

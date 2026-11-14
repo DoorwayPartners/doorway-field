@@ -98,11 +98,13 @@ const guardrails = () => require('./scan_secrets_csp.js').scan(ok);
     ok(first === nearId, 'List sorted nearest-first from GPS', { first, nearId });
     await page.click('#list-body tr:first-child .jump'); await page.waitForTimeout(300);
     ok(await page.evaluate(id => DF.currentTab === 'map' && DF.card.current() === id, nearId), '1-tap Jump to Pin opens the map + card');
-    for (const m of ['satellite', 'street', 'hybrid']) {
-      await page.click('#pill-layers'); await page.click('.mode-card[data-mode=' + m + ']');
-      await page.waitForFunction(x => DF.map.ready && DF.map.mode === x, m, { timeout: 15000 });
-      const s = await page.evaluate(() => { const st = DF.map.instance.getStyle(); return { tiles: st.sources.imagery ? st.sources.imagery.tiles[0] : '', leads: !!st.sources.leads, ring: !!DF.map.instance.getLayer('pin-stack') }; });
-      ok(s.tiles.includes('google.com/vt/lyrs=' + { street: 'm', satellite: 's', hybrid: 'y' }[m] + '&') && s.leads && s.ring, 'Map Settings › ' + m + ' = Google lyrs=' + { street: 'm', satellite: 's', hybrid: 'y' }[m] + ' (pins + rings re-added)', s);
+    for (const b of ['esri', 'osm', 'google']) {
+      await page.click('#pill-layers'); await page.click('#basemap-menu [data-b=' + b + ']');
+      await page.waitForFunction(x => DF.map.ready && DF.map.base === x, b, { timeout: 15000 });
+      const s = await page.evaluate(() => { const st = DF.map.instance.getStyle(); return { tiles: st.sources.imagery ? st.sources.imagery.tiles[0] : '', ref: !!st.sources['ref-roads'], leads: !!st.sources.leads,
+        ring: !!DF.map.instance.getLayer('pin-stack'), label: DF.$('#pill-layers').textContent, menu: DF.$('#basemap-menu').classList.contains('open') }; });
+      ok((b === 'google' ? /lyrs=y&/.test(s.tiles) && s.label === 'Hybrid ▾' : b === 'esri' ? /World_Imagery/.test(s.tiles) && s.ref && s.label === 'Esri ▾' : !s.tiles && s.label === 'Street ▾') && !s.menu && s.leads && s.ring,
+        'Hybrid ▾ menu › ' + { google: 'Google Hybrid', esri: 'Esri Satellite', osm: 'Street (OSM)' }[b] + ' in one tap (pins + rings re-added)', s);
     }
     const rot = await page.evaluate(async () => { const m = DF.map.instance, me0 = m.getSource('me')._data.features.length; m.jumpTo({ bearing: 40, pitch: 30 }); const tilted = Math.round(m.getPitch()); DF.$('#pill-compass').click(); await new Promise(r => setTimeout(r, 450));
       return { drag: m.dragRotate.isEnabled(), touchRot: m.touchZoomRotate.isEnabled() && m.touchZoomRotate._rotationDisabled !== true, touchPitch: m.touchPitch.isEnabled(), maxPitch: m.getMaxPitch(), tilted, bearing: Math.round(m.getBearing()), pitch: Math.round(m.getPitch()), me0 }; });

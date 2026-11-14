@@ -229,8 +229,9 @@
     on('#sel-clear', () => DF.map.select([]));
     on('#pill-stamp', () => { const open = !$('#stamp-bar').classList.contains('open'); $('#stamp-bar').classList.toggle('open', open); if (!open) setStamp(false); $('#pill-stamp').classList.toggle('active', open); });
     on('#stamp-close', () => { setStamp(false); $('#stamp-bar').classList.remove('open'); $('#pill-stamp').classList.remove('active'); });
-    on('#pill-layers', () => DF.openModal('layers-drawer'));
-    DF.$$('.mode-card').forEach(c => c.addEventListener('click', () => { DF.map.setMode(c.dataset.mode); DF.closeModal('layers-drawer'); }));
+    on('#pill-layers', () => DF.$('#basemap-menu').classList.toggle('open'));
+    DF.$$('#basemap-menu button').forEach(b => b.addEventListener('click', () => { DF.$('#basemap-menu').classList.remove('open'); DF.map.setBasemap(b.dataset.b); }));
+    DF.bus.on('map:blank', () => DF.$('#basemap-menu').classList.remove('open'));
     on('#pill-drop', () => showAdd(!dropArmed));   // bar explains itself: tap a house, or My GPS / Map centre
     on('#add-gps', () => addPin('gps')); on('#add-center', () => addPin('center')); on('#add-close', () => showAdd(false));
     on('#pill-compass', () => DF.map.instance.easeTo({ bearing: 0, pitch: 0, duration: 300 }));   // N = back to north-up, flat

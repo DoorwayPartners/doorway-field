@@ -80,13 +80,14 @@ async function newPage(browser, base, opts) {
     geolocation: opts.geo || { latitude: 43.4394, longitude: -70.7743 }, acceptDownloads: true }));
   await stub(context);
   if (opts.block) await context.route(opts.block, r => r.abort());
+  if (opts.hang) await context.route(opts.hang, () => {});          // tiles that never answer (silent rate-limit / dead CDN)
   if (opts.env) await context.route('**/config.env.js', r => r.fulfill({ body: 'window.DF_ENV = ' + JSON.stringify(opts.env) + ';', contentType: 'text/javascript' }));   // later routes win: simulate a blocked tile host
   await context.addInitScript(o => {
     window.__csp = []; document.addEventListener('securitypolicyviolation', e => window.__csp.push(e.violatedDirective + ' ' + e.blockedURI));
-    window.DF_CONFIG_OVERRIDE = Object.assign({ API_URL: 'https://api.test/exec', FIXTURE_URL: '/tests/Brookline_Sanford_50.json', SW: false, FLUSH_EVERY_MS: 3000, ROSTER: o.roster }, o.override || {});
+    window.DF_CONFIG_OVERRIDE = Object.assign(o.noApi ? {} : { API_URL: 'https://api.test/exec' }, { FIXTURE_URL: '/tests/Brookline_Sanford_50.json', SW: false, FLUSH_EVERY_MS: 3000, ROSTER: o.roster }, o.override || {});
     if (!o.install && !localStorage.getItem('df.installDismissed')) localStorage.setItem('df.installDismissed', String(Date.now()));   // banner tested on purpose only
     if (o.user && !localStorage.getItem('df.user')) localStorage.setItem('df.user', JSON.stringify({ id: o.user }));
-  }, { user: opts.user || '', override: opts.override || null, roster: TEST_ROSTER, install: !!opts.install });
+  }, { user: opts.user || '', override: opts.override || null, roster: TEST_ROSTER, install: !!opts.install, noApi: !!opts.noApi });
   const page = await context.newPage(), errors = [];
   page.on('pageerror', e => errors.push(String(e)));
   await page.goto(base + (opts.path || ''));
