@@ -4,7 +4,7 @@
 // list bulk actions, batch delete / clear turf, roster + PIN, inventory, campaigns, outbox, 19-column (+ Campaign) export. Run: node tests/test_field_v2.js
 const fs = require('fs');
 const H = require('./field_harness.js');
-const { ok, fixture, newPage, ready, idle, tap, OWNER, MANAGER, AGENT_A, AGENT_B } = H;
+const { ok, fixture, newPage, ready, idle, tap, OWNER, MANAGER, AGENT_A, AGENT_B, api } = H;
 const SR19 = ['Assigned to (email)', 'Assigned to (name)', 'Status', 'Business Name', 'First Name', 'Last Name', 'Phone', 'Email', 'Address', 'Apt/Suite', 'City', 'State/Region', 'Postal Code', 'Country', 'Latitude', 'Longitude', 'Notes', 'Appointment', 'Date Created'];
 const visibleCount = page => page.evaluate(() => DF.map.fc().features.length);
 const csvOf = async (page, click) => { const [dl] = await Promise.all([page.waitForEvent('download'), page.click(click)]); return { name: dl.suggestedFilename(), text: fs.readFileSync(await dl.path(), 'utf8') }; };
@@ -188,9 +188,10 @@ const lines = t => t.trimEnd().split('\r\n');
     const noteId = await page.evaluate(() => { const r = DF.sync.all().find(x => DF.inCampaign(x)); DF.sync.mutate(r.lead_id, { rep_note: 'blue door zebra gate' }, 'note', { text: 'blue door zebra gate' }); return r.lead_id; });
     await page.click('#pill-search'); await page.fill('#search-input', 'zebra');
     const local = await page.$$eval('#search-results li:not(.geo)', l => l.length);
-    await page.fill('#search-input', 'Portland Maine'); await page.waitForSelector('#search-results li.geo', { timeout: 8000 });
+    const g0 = api.geoSearches; await page.fill('#search-input', 'Portland Maine'); await page.waitForTimeout(900); const leaked = api.geoSearches - g0, btn = await page.isVisible('#search-geo');
+    await page.click('#search-geo'); await page.waitForSelector('#search-results li.geo', { timeout: 8000 });
     await page.click('#search-results li.geo'); const cen = await page.evaluate(() => DF.map.instance.getCenter());
-    ok(local === 1 && Math.abs(cen.lat - 43.63) < 0.06 && Math.abs(cen.lng + 70.26) < 0.06, 'search: a note word finds the lead; no local match → Nominatim jumps to the town', { local, cen });
+    ok(local === 1 && leaked === 0 && btn && Math.abs(cen.lat - 43.63) < 0.06 && Math.abs(cen.lng + 70.26) < 0.06, 'search: on-device only (0 external queries while typing); Search Town/Street tap → Nominatim jump', { local, leaked, btn, cen });
     await page.evaluate(id => DF.bus.emit('pin:selected', id), noteId);
     const dir = await page.evaluate(id => { const r = DF.sync.get(id); return { href: DF.$('#card-dir').getAttribute('href'), want: 'https://maps.google.com/?daddr=' + r.lat + ',' + r.lng, t: DF.$('#card-dir').target }; }, noteId);
     ok(dir.href === dir.want && dir.t === '_blank', 'card Directions = 1-tap Google turn-by-turn to the house', dir);
@@ -237,8 +238,13 @@ const lines = t => t.trimEnd().split('\r\n');
     await page.click('.tab[data-tab=admin]');
     const noOwnerInv = await page.evaluate(() => !DF.$('#roster-body tr[data-id="cristian-coy"] .r-inv'));
     await page.click('#roster-body tr[data-id="agent-1"] .r-inv'); await page.waitForTimeout(150);
-    const inv = await page.evaluate(() => { const u = new URL(DF.$('#invite-out').value); return { invite: u.searchParams.get('invite'), role: u.searchParams.get('role'), name: u.searchParams.get('name'), camp: u.searchParams.get('camp'), shown: !DF.$('#invite-row').hidden }; });
-    ok(noOwnerInv && inv.shown && inv.invite === 'agent-1' && inv.role === 'Agent' && inv.name === 'Agent 1' && inv.camp === 'Fidium', 'Admin › Roster › Copy Invite Link: ?invite=<id>&role=<role>&name=<name> (+ campaigns); none for Owners', inv);
+    await page.waitForFunction(() => /token=/.test(DF.$('#invite-out').value));
+    const inv = await page.evaluate(async () => { const u = new URL(DF.$('#invite-out').value), t = u.searchParams.get('token'), r = DF.roster.get('agent-1'), ev = DF.sync.events().filter(e => e.type === 'invite').pop();
+      return { t, keys: Array.from(u.searchParams.keys()).join(), plain: /agent|Agent|role|name/.test(u.search), hashOk: r.invite && r.invite.h === await DF.sha256(t) && r.invite.exp > Date.now(), evNoToken: ev && ev.h === r.invite.h && !JSON.stringify(ev).includes(t), shown: !DF.$('#invite-row').hidden }; });
+    await page.evaluate(() => DF.sync.flush()); await page.waitForTimeout(300);
+    const invToken = inv.t;
+    ok(noOwnerInv && inv.shown && inv.keys === 'token' && !inv.plain && /^[A-Za-z0-9_-]{22}$/.test(inv.t) && inv.hashOk && inv.evNoToken && api.invites.size >= 1,
+      'Copy Invite Link = opaque ?token= only (no id / name / role); roster + Sync get the SHA-256 hash, never the token; none for Owners', inv);
     await page.click('.tab[data-tab=map]');
     const pw = await page.evaluate(() => { DF.store.set('installDismissed', 0); const ios = DF.pwa.check(), iosTxt = DF.$('#install-text').textContent, goHidden = DF.$('#install-go').hidden;
       const e = new Event('beforeinstallprompt'); e.prompt = () => { window.__prompted = true; }; e.userChoice = Promise.resolve({ outcome: 'accepted' }); window.dispatchEvent(e);
@@ -265,14 +271,25 @@ const lines = t => t.trimEnd().split('\r\n');
     const fbs = await fb.page.evaluate(() => ({ t: DF.map.instance.getStyle().sources.imagery.tiles[0], pins: !!DF.map.instance.getSource('leads') }));
     ok(/arcgisonline/.test(fbs.t) && fbs.pins, 'Google tiles blocked → automatic Esri imagery fallback with pins re-drawn', fbs);
     await fb.context.close();
-    const iv = await newPage(L.browser, L.base, { path: '?invite=rep-nine&role=Owner&name=Rep%20Nine&camp=AT%26T%20Fiber' });
+    const iv = await newPage(L.browser, L.base, { path: '?token=' + invToken + '&role=Owner' });
     await iv.page.waitForSelector('#modal-signin.open');
     const ivs = await iv.page.evaluate(() => ({ sel: DF.$('#signin-name').value, title: DF.$('#signin-title').textContent, pinRow: !DF.$('#signin-pin-row').hidden, label: DF.$('#signin-pin-label').textContent, url: location.search }));
     await iv.page.fill('#signin-pin', '2468'); await iv.page.click('#signin-form button[type=submit]'); await ready(iv.page);
-    const iva = await iv.page.evaluate(() => ({ id: DF.auth.id, role: DF.auth.role, camps: DF.auth.campaigns.join(), pin: DF.roster.get('rep-nine').pin === DF.hash('rep-nine:2468') }));
-    ok(ivs.sel === 'rep-nine' && /Welcome, Rep/.test(ivs.title) && ivs.pinRow && /optional/i.test(ivs.label) && ivs.url === '' && iva.id === 'rep-nine' && iva.role === 'Agent' && iva.camps === 'AT&T Fiber' && iva.pin,
-      'invite link opens set up: rep added (never as Owner), preselected, optional PIN saved, link params cleared', [ivs, iva]);
+    const iva = await iv.page.evaluate(() => ({ id: DF.auth.id, role: DF.auth.role, camps: DF.auth.campaigns.join(), pin: DF.roster.get('agent-1').pin === DF.hash('agent-1:2468') }));
+    ok(ivs.sel === 'agent-1' && /Welcome, Agent/.test(ivs.title) && ivs.pinRow && /optional/i.test(ivs.label) && ivs.url === '' && iva.id === 'agent-1' && iva.role === 'Agent' && iva.camps === 'Fidium' && iva.pin,
+      'token redeemed via the Sync endpoint: role from the authorized roster (URL role=Owner ignored), optional PIN, link cleared', [ivs, iva]);
     await iv.context.close();
+    const fk = await newPage(L.browser, L.base, { path: '?token=' + invToken });   // same token again (single use) + spoofed legacy link both fail closed
+    await fk.page.waitForSelector('#modal-signin.open');
+    const fks = await fk.page.evaluate(() => ({ err: DF.$('#signin-err').textContent, owners: DF.roster.all().filter(r => r.role === 'Owner').length, url: location.search }));
+    await fk.context.close();
+    const lgp = await newPage(L.browser, L.base, { path: '?invite=hacker&role=Owner&name=Hacker' }); await lgp.page.waitForSelector('#modal-signin.open');
+    const lgs = await lgp.page.evaluate(() => ({ err: DF.$('#signin-err').textContent, hacker: !!DF.roster.get('hacker') })); await lgp.context.close();
+    ok(/not verified/.test(fks.err) && fks.owners === 1 && fks.url === '' && /no longer work/.test(lgs.err) && !lgs.hacker, 'used / forged tokens and old ?invite=&role= links grant nothing (fail closed)', [fks, lgs]);
+    const ev = await newPage(L.browser, L.base, { user: AGENT_A, env: { API_URL: 'https://env.test/exec', ORG_ID: 'doorway-env', BASEMAP: 'esri', ROSTER: [{ id: 'leak', name: 'Leak Person', role: 'Owner' }] } }); await ready(ev.page);
+    const evs = await ev.page.evaluate(() => ({ org: DF.cfg.ORG_ID, base: DF.cfg.BASEMAP, tiles: DF.map.instance.getStyle().sources.imagery.tiles[0], leak: DF.cfg.ROSTER.some(r => r.id === 'leak') || !!DF.roster.get('leak') }));
+    ok(evs.org === 'doorway-env' && evs.base === 'esri' && /arcgisonline/.test(evs.tiles) && !evs.leak, 'config.env.js loads before config.public.js; only whitelisted keys apply (a roster can never be injected)', evs);
+    await ev.context.close();
     const j = await newPage(L.browser, L.base, { user: AGENT_B }); await ready(j.page);
     ok((await j.page.$$eval('#campaign-menu button', b => b.map(x => x.textContent))).join() === 'Fidium,AT&T Fiber', 'Agent with 2 campaigns flips between them (no All Campaigns)');
     await j.context.close();

@@ -1,9 +1,9 @@
 // Doorway Field v2.0 — service worker: app shell offline (cache-first), viewed map tiles cached at runtime (capped),
 // API calls never cached. Background Sync (Android/Chrome only) just asks the open page to flush; iPhone flushes on open.
-const SHELL = 'df-shell-2.3.0';
+const SHELL = 'df-shell-2.4.0';
 const TILES = 'df-tiles-1';
 const TILE_CAP = 1500;   // viewed tiles only; no bulk pre-download (OpenFreeMap / Esri terms)
-const ASSETS = ['./', 'index.html', 'styles.css', 'styles-v2.css', 'config.js', 'app.js', 'OfflineSync.js', 'MapEngine.js', 'MapTools.js', 'BottomCard.js', 'FilterDrawer.js',
+const ASSETS = ['./', 'index.html', 'styles.css', 'styles-v2.css', 'config.public.js', 'app.js', 'OfflineSync.js', 'MapEngine.js', 'MapTools.js', 'BottomCard.js', 'FilterDrawer.js',
   'LassoSheet.js', 'ListView.js', 'StatsView.js', 'LeadImport.js', 'AdminPanel.js', 'PinStudio.js', 'TurfZones.js', 'Pwa.js', 'manifest.webmanifest', 'icon.svg',
   'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js', 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css'];
 const TILE_HOSTS = ['server.arcgisonline.com', 'basemap.nationalmap.gov', 'tiles.openfreemap.org'];
@@ -26,6 +26,10 @@ self.addEventListener('fetch', e => {
       if (res.ok) { c.put(req, res.clone()); trim(c); }
       return res;
     }).catch(() => caches.match(req)));
+    return;
+  }
+  if (url.origin === location.origin && url.pathname.endsWith('/config.env.js')) {      // endpoints: network-first so a changed Sync URL applies at once
+    e.respondWith(fetch(req).then(res => { if (res.ok) caches.open(SHELL).then(c => c.put(req, res.clone())); return res; }).catch(() => caches.match(req)));
     return;
   }
   if (url.origin === location.origin || url.hostname === 'unpkg.com') {

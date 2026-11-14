@@ -127,3 +127,4 @@ h3 .btn { text-transform: none; letter-spacing: 0; padding: 4px 10px; font-size:
 .card .last { font-size: 13px; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .note-chip { background: #3c4043; color: #fff; }
 .timeline .h-note p { font-weight: 600; }
+#search-geo { margin: 6px 0 0; width: 100%; } #search-geo[hidden] { display: none; }

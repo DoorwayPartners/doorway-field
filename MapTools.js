@@ -155,8 +155,8 @@
     if (id) { $('#add-unit').value = ''; showAdd(false); }
     return id;
   }
-  // ---- search: loaded leads (address, unit, name, zip, note) first, then OSM Nominatim for any street or town ----
-  let geoT = null, geoSeq = 0;
+  // ---- search: 100% on-device over loaded leads. OSM Nominatim is asked ONLY when the rep taps "Search Town/Street" (nothing leaves the phone otherwise) ----
+  let geoSeq = 0;
   async function geoSearch(q) {
     const seq = ++geoSeq, c = DF.map.instance.getCenter();
     try {
@@ -175,10 +175,10 @@
     } catch (e) { return []; }
   }
   function search(q) {
-    q = q.trim().toLowerCase(); const out = $('#search-results'); out.innerHTML = ''; clearTimeout(geoT); geoSeq++;
+    q = q.trim().toLowerCase(); const out = $('#search-results'); out.innerHTML = ''; geoSeq++;
+    $('#search-geo').hidden = q.length < 3;
     if (q.length < 2) return [];
     const hits = DF.sync.all().filter(r => DF.inCampaign(r) && [r.address, r.apt, r.first_name, r.last_name, r.zip, r.city, r.rep_note].join(' ').toLowerCase().includes(q)).slice(0, 6);
-    if (q.length >= 3 && hits.length < 3) geoT = setTimeout(() => geoSearch(q), 500);
     hits.forEach(r => { const li = document.createElement('li'); li.innerHTML = '<b>' + DF.esc(r.address + (r.apt ? ' ' + r.apt : '')) + '</b><span>' + DF.esc([r.first_name, r.last_name].join(' ').trim() || r.city) + '</span>';
       li.addEventListener('click', () => { $('#search-bar').classList.remove('open'); DF.map.jumpTo(r.lead_id); }); out.appendChild(li); });
     return hits;
@@ -188,6 +188,7 @@
     const on = (sel, fn) => $(sel).addEventListener('click', fn);
     on('#pill-search', () => { $('#search-bar').classList.toggle('open'); $('#search-input').focus(); });
     $('#search-input').addEventListener('input', e => search(e.target.value));
+    on('#search-geo', () => { const q = $('#search-input').value.trim(); if (q.length >= 3) geoSearch(q); });
     on('#pill-lasso', () => lasso ? endLasso() : startLasso());
     on('#lasso-done', () => finishLasso());
     on('#lasso-cancel', () => endLasso());

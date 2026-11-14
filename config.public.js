@@ -1,9 +1,13 @@
-// Doorway Field v2.0 — page config. No secrets, no Drive/Sheet/Script IDs, no emails in source. Public tile URLs only.
+// Doorway Field — public page config (config.public.js, ships in every drop). No secrets, no Drive/Sheet/Script IDs, no emails. Public tile URLs only.
+// Runtime endpoints come from config.env.js (persistent, never in a zip, loaded first): only the ENV_KEYS below are taken from it.
 // Everything here is a default: the owner edits roster, campaigns and pin inventory in Admin (saved on the device until the API ships).
-window.DF_CONFIG = Object.assign({
-  VERSION: '2.3.0',
+window.DF_CONFIG = (function () {
+  const ENV_KEYS = ['API_URL', 'ORG_ID', 'BASEMAP', 'IMAGERY'], src = window.DF_ENV || {}, env = {};
+  ENV_KEYS.forEach(k => { if (typeof src[k] === 'string') env[k] = src[k]; });   // whitelist: config.env.js can never inject a roster
+  return Object.assign({
+  VERSION: '2.4.0',
   ORG_ID: 'doorway',
-  API_URL: '',                 // default Sync URL (Apps Script / Supabase function). Blank = local-only; Admin › Sync Outbox can set it
+  API_URL: '',                 // stays blank here: the live Sync URL lives in config.env.js. Admin › Sync Outbox can also set one per device
   FIXTURE_URL: '',             // tests/dev only
   BASEMAP: 'google',           // 'google' (Hybrid / Street / Satellite) | 'esri' (Esri imagery + OpenFreeMap). Google auto-falls back to Esri
   IMAGERY: 'esri',             // fallback imagery: 'esri' | 'usgs'
@@ -27,7 +31,7 @@ window.DF_CONFIG = Object.assign({
   ],
   ROUTE_MAX_STOPS: 23,
   GEOCODE_URL: 'https://nominatim.openstreetmap.org/reverse',
-  SEARCH_URL: 'https://nominatim.openstreetmap.org/search',      // street / town jump in the search bar (debounced, light use)   // free OSM reverse geocoder: light use only (1 request/s, cached)
+  SEARCH_URL: 'https://nominatim.openstreetmap.org/search',      // street / town jump: only when the rep taps Search Town/Street   // free OSM reverse geocoder: light use only (1 request/s, cached)
   TILES: {
     google: 'https://mt{s}.google.com/vt/lyrs={lyrs}&x={x}&y={y}&z={z}&scale=2',   // y hybrid | m street | s satellite; scale=2 = retina tiles
     googleAttr: 'Map data © Google',
@@ -41,4 +45,5 @@ window.DF_CONFIG = Object.assign({
     font: 'Noto Sans Regular',
     vectorAttr: '<a href="https://openfreemap.org">OpenFreeMap</a> © <a href="https://www.openmaptiles.org/">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
   }
-}, window.DF_CONFIG_OVERRIDE || {});
+}, env, window.DF_CONFIG_OVERRIDE || {});
+})();

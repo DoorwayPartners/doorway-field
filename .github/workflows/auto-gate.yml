@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      FIELD_PUBLISHED: '1'   # published repo: app files at the root, config.js may carry the real Sync URL
+      FIELD_PUBLISHED: '1'   # published repo: app files at the root; config.env.js carries the real Sync URL (whitelisted keys only)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -15,7 +15,8 @@
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="styles-v2.css">
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" defer></script>
-  <script src="config.js" defer></script>
+  <script src="config.env.js" defer></script><!-- persistent runtime endpoints (published repo only; a 404 here is normal in staging) -->
+  <script src="config.public.js" defer></script>
   <script src="app.js" defer></script>
   <script src="OfflineSync.js" defer></script>
   <script src="MapEngine.js" defer></script>
@@ -55,7 +56,7 @@
       <button type="button" class="pill" id="pill-compass" aria-label="Compass: reset north">N</button>
       <button type="button" class="pill gps" id="pill-gps" aria-label="Recenter and follow me">◎</button>
     </div>
-    <div id="search-bar" class="floatbar"><input id="search-input" type="search" placeholder="Search leads, street or town" autocomplete="off"><ul id="search-results"></ul></div>
+    <div id="search-bar" class="floatbar"><input id="search-input" type="search" placeholder="Search your leads" autocomplete="off"><button type="button" class="btn" id="search-geo" hidden>Search Town/Street ⌖</button><ul id="search-results"></ul></div>
     <div id="lasso-bar" class="floatbar actionbar"><span id="lasso-count">Drag a circle around doors</span><button type="button" class="btn" id="lasso-cancel">Cancel</button><button type="button" class="btn primary" id="lasso-done">Done</button></div>
     <div id="sel-bar" class="floatbar actionbar"><span id="sel-count">0 selected</span><button type="button" class="btn" id="sel-clear">Clear</button><button type="button" class="btn primary" id="sel-status">Actions</button></div>
     <button type="button" id="route-clear" class="route-clear" hidden>Route ✕</button>

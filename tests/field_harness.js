@@ -17,8 +17,12 @@ const ok = (cond, name, info) => { if (cond) { pass++; console.log('  ✓ ' + na
 const report = () => { console.log('\n' + (fail ? 'FAIL' : 'PASS') + ' ' + pass + '/' + (pass + fail)); return fail; };
 
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAAABJRU5ErkJggg==', 'base64');
-const api = { events: new Map(), leads: new Map(), posts: 0, reject: new Set(), extra: [] };
+const api = { events: new Map(), leads: new Map(), posts: 0, reject: new Set(), extra: [], invites: new Map(), geoSearches: 0 };
 function apiHandle(body) {
+  if (body.action === 'redeem_invite') {                          // Sync contract: single-use, unexpired token hash -> authorized roster profile
+    const i = api.invites.get(body.token_hash); if (!i || i.used || i.exp < Date.now()) return { ok: false };
+    i.used = true; return { ok: true, rep: i.rep };
+  }
   api.posts++;
   const accepted = [];
   (body.events || []).forEach(e => {
@@ -26,6 +30,7 @@ function apiHandle(body) {
     accepted.push(e.event_id);
     if (api.events.has(e.event_id)) return;                       // idempotent on event_id
     api.events.set(e.event_id, e);
+    if (e.type === 'invite') api.invites.set(e.h, { exp: e.exp, rep: { id: e.rep, name: e.name, role: e.role, team: e.team, campaigns: e.campaigns, color: e.color, pin: e.pin } });
     if (!e.lead_id || !e.patch) return;
     const cur = api.leads.get(e.lead_id) || { lead_id: e.lead_id };
     api.leads.set(e.lead_id, Object.assign(cur, e.patch, { updated_at: new Date().toISOString() }));
@@ -44,8 +49,8 @@ async function stub(context) {
   });
   await context.route('https://nominatim.openstreetmap.org/**', r => {           // reverse geocoder stub: deterministic house number from the coordinates
     const u = new URL(r.request().url());
-    if (u.pathname === '/search') return r.fulfill({ json: /portland/i.test(u.searchParams.get('q')) ? [{ display_name: 'Portland, Cumberland County, Maine, United States', lat: '43.6591', lon: '-70.2568',
-      boundingbox: ['43.54', '43.71', '-70.35', '-70.17'] }] : [], headers: { 'access-control-allow-origin': '*' } });
+    if (u.pathname === '/search') { api.geoSearches++; return r.fulfill({ json: /portland/i.test(u.searchParams.get('q')) ? [{ display_name: 'Portland, Cumberland County, Maine, United States', lat: '43.6591', lon: '-70.2568',
+      boundingbox: ['43.54', '43.71', '-70.35', '-70.17'] }] : [], headers: { 'access-control-allow-origin': '*' } }); }
     const n = 300 + Math.round(Math.abs(Number(u.searchParams.get('lon')) * 1e4)) % 600;
     r.fulfill({ json: { address: { house_number: String(n), road: 'Elm Street', city: 'Sanford', 'ISO3166-2-lvl4': 'US-ME', postcode: '04073' } }, headers: { 'access-control-allow-origin': '*' } });
   });
@@ -68,7 +73,8 @@ async function newPage(browser, base, opts) {
   const context = await browser.newContext(Object.assign({}, devices[opts.device || 'iPhone 13'], { serviceWorkers: 'block', permissions: ['geolocation'],
     geolocation: opts.geo || { latitude: 43.4394, longitude: -70.7743 }, acceptDownloads: true }));
   await stub(context);
-  if (opts.block) await context.route(opts.block, r => r.abort());   // later routes win: simulate a blocked tile host
+  if (opts.block) await context.route(opts.block, r => r.abort());
+  if (opts.env) await context.route('**/config.env.js', r => r.fulfill({ body: 'window.DF_ENV = ' + JSON.stringify(opts.env) + ';', contentType: 'text/javascript' }));   // later routes win: simulate a blocked tile host
   await context.addInitScript(o => {
     window.__csp = []; document.addEventListener('securitypolicyviolation', e => window.__csp.push(e.violatedDirective + ' ' + e.blockedURI));
     window.DF_CONFIG_OVERRIDE = Object.assign({ API_URL: 'https://api.test/exec', FIXTURE_URL: '/tests/Brookline_Sanford_50.json', SW: false, FLUSH_EVERY_MS: 3000, ROSTER: o.roster }, o.override || {});

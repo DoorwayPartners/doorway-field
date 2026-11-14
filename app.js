@@ -81,30 +81,47 @@
   }
   DF.setUser = setUser;
   DF.signOut = () => { DF.store.set('user', null); location.reload(); };
-  // ---- invite link (Admin › Roster › Copy Invite Link): adds the rep to this phone, preselects them, offers an optional PIN ----
-  const PAL = ['#00a3a3', '#c9a227', '#9b51e0', '#f2994a', '#2f80ed', '#ff5fa2', '#1e8e3e'];
+  // ---- invite links (Admin › Roster › Copy Invite Link) = ?token=<128-bit random>. No role, name or id in the URL. The phone hashes the token
+  // (SHA-256) and resolves it against the authorized roster: this device's roster first, then the private Sync endpoint (action redeem_invite).
+  // The role always comes from that roster, never from the URL, and a link can never sign anyone in as Owner.
+  const b64url = a => btoa(String.fromCharCode.apply(null, Array.from(a))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  DF.newToken = () => b64url(crypto.getRandomValues(new Uint8Array(16)));
+  DF.sha256 = async s => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))).map(x => ('0' + x.toString(16)).slice(-2)).join('');
+  async function redeem(h) {
+    const url = DF.sync.syncUrl(); if (!url) return null;
+    try {
+      const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ action: 'redeem_invite', token_hash: h, org_id: DF.cfg.ORG_ID }) });
+      const j = await res.json(), p = j && j.ok && j.rep;
+      if (!p || !/^[a-z0-9-]{1,40}$/.test(p.id)) return null;
+      const rep = { id: p.id, name: String(p.name || p.id).slice(0, 40), role: p.role === 'Manager' ? 'Manager' : 'Agent', team: String(p.team || '').slice(0, 40),
+        campaigns: Array.isArray(p.campaigns) && p.campaigns.length ? p.campaigns.map(String) : [DF.cfg.DEFAULT_CAMPAIGN], color: /^#[0-9a-f]{6}$/i.test(p.color) ? p.color : '#00a3a3' };
+      if (/^[0-9a-f]{16}$/.test(p.pin || '')) rep.pin = p.pin;
+      await DF.roster.save(DF.roster.all().filter(x => x.id !== rep.id).concat([rep]));
+      return rep;
+    } catch (e) { return null; }
+  }
   async function takeInvite() {
-    const q = new URLSearchParams(location.search), id = String(q.get('invite') || '').toLowerCase().replace(/[^a-z0-9-]/g, '').slice(0, 40);
-    if (!id) return null;
-    history.replaceState(null, '', location.pathname + location.hash);          // the link sets up once; no params left in the address bar
-    let r = DF.roster.get(id);
-    if (!r) {
-      const role = q.get('role') === 'Manager' ? 'Manager' : 'Agent';           // a link can never create an Owner
-      const camp = String(q.get('camp') || '').split(',').map(s => s.trim()).filter(c => DF.campaigns().includes(c));
-      r = { id, name: String(q.get('name') || id).trim().slice(0, 40), role, team: '', campaigns: role === 'Manager' ? ['*'] : (camp.length ? camp : [DF.cfg.DEFAULT_CAMPAIGN]),
-        color: PAL[parseInt(DF.hash(id).slice(0, 4), 16) % PAL.length] };
-      await DF.roster.save(DF.roster.all().concat([r]));
-    }
-    return r;
+    const q = new URLSearchParams(location.search), token = q.get('token');
+    if (!token && !q.get('invite')) return null;
+    history.replaceState(null, '', location.pathname + location.hash);          // the link is used once; nothing left in the address bar
+    DF.inviteMsg = 'Invite not verified (expired, used, or offline). Ask your manager for a new link, or pick your name.';
+    if (!token) { DF.inviteMsg = 'Old-style invite links no longer work. Ask your manager for a new link.'; return null; }
+    if (!/^[A-Za-z0-9_-]{20,64}$/.test(token) || !(window.crypto && crypto.subtle)) return null;
+    const h = await DF.sha256(token), now = Date.now();
+    const local = DF.roster.all().find(x => x.role !== 'Owner' && x.invite && x.invite.h === h && x.invite.exp > now);
+    const r = local || await redeem(h);
+    if (r) DF.inviteMsg = '';
+    return r || null;
   }
   function signIn(inv) {
     return new Promise(resolve => {
       const saved = DF.store.get('user', null);
-      if (!inv && saved && saved.id && setUser(saved.id)) return resolve();
+      if (!inv && !DF.inviteMsg && saved && saved.id && setUser(saved.id)) return resolve();
       const sel = DF.$('#signin-name');
       sel.innerHTML = ['Owner', 'Manager', 'Agent'].map(role => '<optgroup label="' + role + 's">' + DF.roster.all().filter(r => r.role === role)
         .map(r => '<option value="' + DF.esc(r.id) + '">' + DF.esc(r.name) + '</option>').join('') + '</optgroup>').join('');
       if (inv) { sel.value = inv.id; DF.$('#signin-title').textContent = 'Welcome, ' + inv.name.split(' ')[0]; }
+      DF.$('#signin-err').textContent = DF.inviteMsg || '';
       const showPin = () => { const r = DF.roster.get(sel.value), setNew = !!(inv && r && r.id === inv.id && !r.pin);
         DF.$('#signin-pin-row').hidden = !(r && (r.pin || setNew)); DF.$('#signin-pin-label').textContent = setNew ? 'Set a PIN (optional, 4-8 digits)' : 'PIN'; };
       sel.onchange = showPin; showPin();

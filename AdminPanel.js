@@ -55,18 +55,18 @@
     return r;
   }
 
-  // ---- 1-tap invite link: ?invite=<repId>&role=<role>&name=<name>[&camp=<campaigns>] → the rep's phone sets itself up (never an Owner) ----
-  function inviteUrl(r) {
-    const u = new URL(location.href.split('#')[0].split('?')[0]);
-    u.searchParams.set('invite', r.id); u.searchParams.set('role', r.role); u.searchParams.set('name', r.name);
-    const c = (r.campaigns || []).filter(x => x !== '*'); if (c.length) u.searchParams.set('camp', c.join(','));
-    return u.toString();
-  }
+  // ---- 1-tap invite link: ?token=<random> only. The roster keeps just the SHA-256 of the token (+ 7-day expiry); the invite event carries the
+  // profile to the private Sync endpoint, which answers redeem_invite. No name, id or role ever sits in the shareable URL. ----
+  const inviteUrl = token => location.href.split('#')[0].split('?')[0] + '?token=' + token;
   async function copyInvite(id) {
     const r = DF.roster.get(id); if (!r || !DF.isOwner() || r.role === 'Owner') return null;
-    const url = inviteUrl(r); $('#invite-out').value = url; $('#invite-row').hidden = false;
-    try { await navigator.clipboard.writeText(url); DF.toast('Invite link copied for ' + r.name); }
+    const token = DF.newToken(), h = await DF.sha256(token), exp = Date.now() + 7 * 864e5;
+    await DF.roster.save(DF.roster.all().map(x => x.id === r.id ? Object.assign({}, x, { invite: { h, exp } }) : x));
+    DF.sync.append({ type: 'invite', rep: r.id, name: r.name, role: r.role, team: r.team || '', campaigns: r.campaigns || [], color: r.color, pin: r.pin || '', h, exp });
+    const url = inviteUrl(token); $('#invite-out').value = url; $('#invite-row').hidden = false;
+    try { await navigator.clipboard.writeText(url); DF.toast('Invite link copied (valid 7 days)'); }
     catch (e) { $('#invite-out').select(); DF.toast('Invite link ready: copy it from the box'); }
+    DF.sync.flush();
     return url;
   }
 
