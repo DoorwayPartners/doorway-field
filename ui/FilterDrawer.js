@@ -28,6 +28,7 @@
     if (!DF.inCampaign(r)) return false;
     if (F.statuses && !F.statuses.has(r.status_code)) return false;
     const mine = r.assigned_rep_email && repKey(r) === DF.auth.id;
+    if (!mine && !DF.isManager()) return false;                          // v2.5.1: an Agent sees only leads assigned to them (map + list)
     if (mine ? !F.mine : !F.others) return false;
     if (F.users && !F.users.has(repKey(r))) return false;
     return inDate(r);

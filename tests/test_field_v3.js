@@ -59,24 +59,28 @@ const { ok, newPage, ready, tap, OWNER, api } = H;
     await page.click('#followups li[data-id="' + fuIds[2] + '"] .fu-jump'); await page.waitForTimeout(700);
     const jumped = await page.evaluate(id => DF.currentTab === 'map' && DF.card.current() === id, fuIds[2]);
     ok(fu.visible && fu.apptOrder && fu.streets >= 1 && fu.nav && fu.hasGb && fu.count === String(fu.n) && jumped, 'Follow-Ups: APPT by appointment time, P GB / GB grouped by street, navigation on every row, 1-tap jump to the pin', fu);
-    // ---- v2.5: pink finger lasso → Assign Turf ----
+    // ---- v2.5.1: black Sharpie lasso → Lasso Summary → Assign Leads (no outline left on the map) ----
     await page.evaluate(async () => { DF.card.close(); DF.showTab('map'); const f = DF.sync.all().find(r => r.campaign === 'Fidium');
       DF.map.instance.jumpTo({ center: [f.lng, f.lat], zoom: 17 }); await new Promise(r => setTimeout(r, 300)); });
     await page.click('#pill-lasso');
     const arm = await page.evaluate(() => ({ pink: DF.$('#pill-lasso').classList.contains('turf-draw'), badge: !DF.$('#turf-badge').hidden && /Draw turf with your finger/.test(DF.$('#turf-badge').textContent), pan: DF.map.instance.dragPan.isEnabled() }));
     const mc = await page.evaluate(() => { const b = DF.$('#map').getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2, Math.min(b.width, b.height) * 0.42]; });
     await page.mouse.move(mc[0] + mc[2], mc[1]); await page.mouse.down();
-    for (let d = 0; d <= 360; d += 15) await page.mouse.move(mc[0] + mc[2] * Math.cos(d * Math.PI / 180), mc[1] + mc[2] * Math.sin(d * Math.PI / 180));
+    for (let d = 0; d <= 400; d += 15) await page.mouse.move(mc[0] + mc[2] * Math.cos(d * Math.PI / 180), mc[1] + mc[2] * Math.sin(d * Math.PI / 180));   // overshoots the start (bowtie bait)
     const live = await page.evaluate(() => { const f = DF.map.instance.getSource('turf-draw')._data; return f && f.geometry ? f.geometry.coordinates.length : 0; });
     await page.mouse.up(); await page.waitForTimeout(300);
-    const ts = await page.evaluate(() => ({ open: DF.$('#turf-sheet').classList.contains('open'), n: DF.turflasso.ids().length, count: DF.$('#ts-count').textContent, pan: DF.map.instance.dragPan.isEnabled(),
-      pink: DF.$('#pill-lasso').classList.contains('turf-draw'), badge: !DF.$('#turf-badge').hidden, color: DF.map.instance.getPaintProperty('turf-draw', 'line-color') }));
-    await page.selectOption('#ts-rep', 'agent-1'); await page.selectOption('#ts-camp', 'Fidium'); const want = await page.evaluate(() => DF.turflasso.count());
-    await page.click('#ts-save'); await page.waitForTimeout(250);
-    const sv = await page.evaluate(ids => { const z = DF.turf.all().slice(-1)[0], fid = ids.filter(id => DF.sync.get(id).campaign === 'Fidium');
-      return { assigned: fid.length && fid.every(id => DF.sync.get(id).assigned_rep_email === 'agent-1'), zone: z && z.rep === 'agent-1' && z.campaign === 'Fidium' && z.poly.length >= 3, n: fid.length, closed: !DF.$('#turf-sheet').classList.contains('open') }; }, await page.evaluate(() => DF.lasso.ids().length ? DF.lasso.ids() : DF.sync.all().map(r => r.lead_id).filter(id => DF.sync.get(id).assigned_rep_email === 'agent-1')));
-    ok(arm.pink && arm.badge && !arm.pan && live > 5 && ts.open && ts.n > 0 && /^\d+ doors?$/.test(ts.count) && ts.pan && !ts.pink && !ts.badge && ts.color === '#ec4899' && want > 0 && sv.assigned && sv.zone && sv.closed,
-      'pink finger lasso: pink toggle + 👆 badge + panning paused, live pink stroke, auto-close → Assign Turf (count · rep · campaign) → Save Turf assigns + saves the zone', { arm, live, ts, want, sv });
+    const ts = await page.evaluate(() => { const m = DF.map.instance, f = m.getSource('turf-draw')._data, c = f.geometry ? f.geometry.coordinates : [], ids = DF.turflasso.ids(), o = DF.turflasso.summary(ids);
+      return { open: DF.$('#turf-sheet').classList.contains('open'), n: ids.length, total: DF.$('#ts-total').textContent, sum: o.prospects + o.customers + o.other === o.total, by: DF.$('#ts-pros-by').textContent,
+        closed: c.length > 3 && c[0][0] === c[c.length - 1][0], pan: m.dragPan.isEnabled(), ink: m.getPaintProperty('turf-draw', 'line-color'), w: m.getPaintProperty('turf-draw', 'line-width'),
+        halo: m.getPaintProperty('turf-draw-halo', 'line-color') + '/' + m.getPaintProperty('turf-draw-halo', 'line-width'), unassign: Array.from(DF.$('#ts-rep').options).some(x => x.value === '' && x.text === 'Unassign') }; });
+    const tw = await page.evaluate(() => DF.turflasso.untwist([[0, 0], [10, 0], [10, 10], [0, 10], [2, -3]]).length);   // tail crossing the first edge is cut
+    await page.selectOption('#ts-rep', 'agent-2'); await page.click('#ts-assign'); await page.waitForTimeout(250);
+    const sv = await page.evaluate(ids => ({ assigned: ids.every(id => DF.sync.get(id).assigned_rep_email === 'agent-2'), ring: ids.every(id => DF.map.ringOf(DF.sync.get(id)) === DF.roster.color('agent-2')),
+      gone: !DF.map.instance.getSource('turf-draw')._data.geometry && !(DF.map.instance.getSource('lasso')._data.features || []).length, closed: !DF.$('#turf-sheet').classList.contains('open'),
+      ev: DF.sync.events().filter(e => e.type === 'assign' && e.source === 'lasso').length }), ts.n ? await page.evaluate(() => DF.sync.all().filter(r => r.assigned_rep_email === 'agent-2').map(r => r.lead_id)) : []);
+    ok(arm.pink && arm.badge && !arm.pan && live > 5 && ts.open && ts.n > 0 && ts.total === String(ts.n) && ts.sum && /^New \d+ · NH \d+ · GB \d+ · P GB \d+ · APPT \d+$/.test(ts.by) && ts.closed && ts.pan && ts.ink === '#09090b' && ts.w === 5 &&
+      ts.halo === '#ffffff/9' && ts.unassign && tw === 4 && sv.assigned && sv.ring && sv.gone && sv.closed && sv.ev > 0,
+      'Sharpie lasso: bold black line + white halo, overshoot untwisted, Lasso Summary (Total · Prospects · Customers · Other / NI) → Assign Leads recolours rings + clears the outline', { arm, live, ts, tw, sv });
     // ---- v2.5: 2-mode GPS ----
     await page.click('#pill-gps'); await page.waitForFunction(() => DF.gps.following && DF.gps.watching, null, { timeout: 8000 }); await page.waitForTimeout(700);
     const g1 = await page.evaluate(() => ({ cls: DF.$('#pill-gps').className, label: DF.$('#pill-gps').getAttribute('aria-label') }));
@@ -131,6 +135,17 @@ const { ok, newPage, ready, tap, OWNER, api } = H;
     await ng.page.click('#pill-gps'); await ng.page.waitForTimeout(800);
     const ngs = await ng.page.evaluate(() => ({ toast: DF.$('#toast-msg').textContent, following: DF.gps.following })); await ng.context.close();
     ok(ngs.toast === 'Enable Location permission in browser settings for GPS' && !ngs.following, 'GPS permission denied → clear non-blocking toast (no silent failure)', ngs);
+    const ap = await newPage(L.browser, L.base, { user: OWNER }); await ready(ap.page);
+    await ap.page.evaluate(() => { const g = navigator.geolocation, fake = (s, e, o) => { setTimeout(() => o && o.enableHighAccuracy ? e({ code: 2 }) : s({ coords: { latitude: 43.4501, longitude: -70.7602, accuracy: 900 } }), 40); return 7; };
+      g.watchPosition = fake; g.getCurrentPosition = fake; g.clearWatch = () => {}; });
+    await ap.page.click('#pill-gps'); await ap.page.waitForFunction(() => DF.gps.last(), null, { timeout: 8000 }); await ap.page.waitForTimeout(900);
+    const aps = await ap.page.evaluate(() => { const c = DF.map.instance.getCenter(); return { coarse: DF.gps.coarse, following: DF.gps.following, d: Math.abs(c.lat - 43.4501) + Math.abs(c.lng + 70.7602) }; }); await ap.context.close();
+    ok(aps.coarse && aps.following && aps.d < 0.001, 'approximate location: high-accuracy POSITION_UNAVAILABLE → low-accuracy retry still flies to the rep', aps);
+    const ag = await newPage(L.browser, L.base, { user: H.AGENT_A }); await ready(ag.page);
+    const ags = await ag.page.evaluate(async () => { const mine = r => DF.filters.repKey(r) === 'agent-1', inC = DF.sync.all().filter(r => DF.inCampaign(r)), v0 = DF.sync.all().filter(DF.map.visible), all = v0.every(mine);
+      const t = inC.find(mine); DF.sync.mutate(t.lead_id, { assigned_rep_email: 'agent-2' }, 'assign'); DF.map.refresh(); DF.list.render && DF.list.render();
+      const v1 = DF.sync.all().filter(DF.map.visible); return { all, n0: v0.length, n1: v1.length, gone: !v1.includes(t), rows: DF.$$('#list-body tr').length }; }); await ag.context.close();
+    ok(ags.all && ags.n0 > 0 && ags.n1 === ags.n0 - 1 && ags.gone, 'Agent view isolation: map + list show only leads assigned to that Agent (reassigned lead disappears)', ags);
 
     console.log('Stability (v2.4.5)');
     const hg = await newPage(L.browser, L.base, { user: OWNER, hang: /mt\d\.google\.com/ }); await ready(hg.page); const t0 = Date.now();

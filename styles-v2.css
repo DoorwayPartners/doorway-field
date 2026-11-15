@@ -143,7 +143,7 @@ h3 .btn { text-transform: none; letter-spacing: 0; padding: 4px 10px; font-size:
 .card-head-actions .pill-outline { padding: 4px 10px; font-size: 13px; } .card-actions .btn { white-space: nowrap; padding: 7px 4px; font-size: 13px; }
 .basemap-menu { position: absolute; right: 12px; top: calc(156px + var(--safe-t)); z-index: 9; display: none; flex-direction: column; background: #fff; border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; min-width: 160px; }
 .basemap-menu.open { display: flex; } .basemap-menu button { border: 0; background: none; padding: 12px 14px; text-align: left; font-weight: 600; font-size: 15px; } .basemap-menu button.on { background: var(--soft); color: var(--red); }
-/* v2.5 pink turf lasso, GPS modes, update banner, sign-in banner, team card */
+/* v2.5 turf lasso toggle (pink), v2.5.1 black Sharpie line + summary, GPS modes, update banner, sign-in banner, team card */
 .pill.turf-draw { background: #ec4899; color: #fff; box-shadow: 0 0 0 4px rgba(236, 72, 153, .35); }
 .turf-badge { position: absolute; left: 50%; top: calc(64px + var(--safe-t)); transform: translateX(-50%); z-index: 8; background: #ec4899; color: #fff; font-weight: 700; padding: 8px 14px; border-radius: 20px; box-shadow: var(--shadow); pointer-events: none; }
 .turf-badge[hidden] { display: none; }
@@ -152,4 +152,5 @@ h3 .btn { text-transform: none; letter-spacing: 0; padding: 4px 10px; font-size:
 .update-banner[hidden] { display: none; }
 .signin-banner { background: #fff4e5; color: #8a4b00; border-radius: 10px; padding: 8px 10px; font-weight: 600; margin: 0 0 8px; } .signin-banner[hidden] { display: none; }
 .team-form { flex-wrap: wrap; } .team-form input, .team-form select { min-width: 110px; } .team-form[hidden] { display: none; }
-.ts-count { font-size: 18px; margin: 4px 0 10px; }
+.ts-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 4px 0 6px; } .ts-grid div { background: #f4f4f5; border-radius: 10px; padding: 6px; text-align: center; }
+.ts-grid dt { font-size: 11px; color: #52525b; } .ts-grid dd { margin: 2px 0 0; font-size: 20px; font-weight: 800; } .ts-by { font-size: 12px; color: #52525b; margin: 0 0 8px; }

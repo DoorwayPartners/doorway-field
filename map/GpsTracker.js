@@ -1,14 +1,15 @@
 // Doorway Field v2.5 — GpsTracker: 2-mode GPS controller on the ◎ button. Tap = watchPosition + fly to the rep + Follow (button blue, "Following GPS").
 // A manual pan unlocks the camera while the blue dot keeps updating; tap again snaps back. Blue dot + accuracy halo only from a REAL fix, < 4 m jitter
-// ignored, watch paused while the screen is off and resumed on return. Permission denied → a clear, non-blocking toast. Also: knock GPS (locateFresh).
+// ignored, watch paused while the screen is off and resumed on return. Permission denied → a clear toast; v2.5.1: unavailable / timeout (Android "Precise location" off) → retry low accuracy and still fly to the rep. Also: knock GPS (locateFresh).
 (function () {
   'use strict';
   const DF = window.DF;
   const $ = s => DF.$(s);
   const WATCH = { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }, JITTER_M = 4;
+  const LOW = { enableHighAccuracy: false, maximumAge: 30000, timeout: 20000 };   // v2.5.1: Android "Precise location" off → network / approximate fix
   const DENIED = 'Enable Location permission in browser settings for GPS';
   let watchId = null, lastPos = null, lastFix = null, paused = false;
-  const G = { following: false, watching: false };
+  const G = { following: false, watching: false, coarse: false };
 
   const meters = (a, b) => { const k = Math.PI / 180, x = (b[0] - a[0]) * k * Math.cos((a[1] + b[1]) * k / 2), y = (b[1] - a[1]) * k; return Math.hypot(x, y) * 6371000; };
   function ring(ll, acc) {                                              // accuracy halo as a 48-point polygon (metres → degrees)
@@ -36,10 +37,11 @@
   const fly = () => { if (!lastPos) return; DF.map.moved = true; DF.map.instance.flyTo({ center: lastPos, zoom: Math.max(DF.map.instance.getZoom(), 17), duration: 600 }); };
   const center = () => { if (lastPos && G.following) DF.map.instance.easeTo({ center: lastPos, zoom: Math.max(DF.map.instance.getZoom(), 17), duration: 500 }); };
   function denied() { DF.toast(DENIED, null, null, 5000); G.following = false; watch(false); }
+  function coarse() { G.coarse = true; if (watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; watch(true); } }   // unavailable / timeout → retry low accuracy
   function watch(on) {
     if (on && watchId === null) {
       if (!navigator.geolocation) { DF.toast(DENIED, null, null, 5000); return false; }
-      watchId = navigator.geolocation.watchPosition(p => { if (onFix(p.coords)) center(); }, e => { if (e.code === 1) denied(); }, WATCH);
+      watchId = navigator.geolocation.watchPosition(p => { if (onFix(p.coords)) center(); }, e => { if (e.code === 1) denied(); else if (!G.coarse) coarse(); }, G.coarse ? LOW : WATCH);
     } else if (!on && watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
     G.watching = watchId !== null; paint();
     return G.watching;
@@ -49,9 +51,12 @@
     if (!navigator.geolocation) { DF.toast(DENIED, null, null, 5000); return Promise.resolve(null); }
     G.following = true; watch(true);
     if (lastFix && Date.now() - lastFix.ts < 15000) { drawMe(); fly(); return Promise.resolve(lastPos); }
-    return new Promise(res => navigator.geolocation.getCurrentPosition(p => {
-      onFix(p.coords); lastPos = [p.coords.longitude, p.coords.latitude]; lastFix = { ll: lastPos, acc: p.coords.accuracy, ts: Date.now() }; drawMe(); fly(); res(lastPos);
-    }, e => { if (e.code === 1) denied(); else DF.toast('Waiting for a GPS signal…'); res(null); }, { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }));
+    const got = res => p => { onFix(p.coords); lastPos = [p.coords.longitude, p.coords.latitude]; lastFix = { ll: lastPos, acc: p.coords.accuracy, ts: Date.now() }; drawMe(); fly(); res(lastPos); };
+    return new Promise(res => navigator.geolocation.getCurrentPosition(got(res), e => {
+      if (e.code === 1) { denied(); return res(null); }
+      if (!G.coarse) coarse();                                           // approximate location: same tap, low-accuracy retry, still flies to the rep
+      navigator.geolocation.getCurrentPosition(got(res), () => { DF.toast('Waiting for a GPS signal…'); res(null); }, LOW);
+    }, G.coarse ? LOW : { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }));
   }
   function follow(on) { if (on === false) { G.following = false; watch(false); return; } G.following = true; watch(true); center(); }   // compat for older callers
   function onVisibility() {

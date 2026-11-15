@@ -197,11 +197,12 @@
   <div id="details-body" class="details-body"></div>
 </div></div>
 
-<div id="turf-sheet" class="modal drawer" role="dialog" aria-label="Assign Turf"><div class="sheet compact">
-  <div class="sheet-head"><h2>Assign Turf</h2><button type="button" class="x" id="ts-close" aria-label="Close">×</button></div>
-  <p class="ts-count"><b id="ts-count">0 doors</b> inside the lasso</p>
-  <div class="pv-actions"><label class="manager-only">Assign to rep <select id="ts-rep"></select></label><label>Campaign <select id="ts-camp"></select></label><input id="ts-name" class="manager-only" placeholder="Turf name (optional)" maxlength="40" aria-label="Turf name"></div>
-  <div class="pv-actions"><button type="button" class="btn primary manager-only" id="ts-save">Save Turf</button><button type="button" class="btn" id="ts-clear">Clear</button><button type="button" class="btn" id="ts-more">More…</button></div>
+<div id="turf-sheet" class="modal drawer" role="dialog" aria-label="Lasso Summary"><div class="sheet compact">
+  <div class="sheet-head"><h2>Lasso Summary</h2><button type="button" class="x" id="ts-close" aria-label="Close">×</button></div>
+  <dl class="ts-grid"><div><dt>Total Doors</dt><dd id="ts-total">0</dd></div><div><dt>Prospects</dt><dd id="ts-pros">0</dd></div><div><dt>Customers</dt><dd id="ts-cust">0</dd></div><div><dt>Other / NI</dt><dd id="ts-other">0</dd></div></dl>
+  <p class="ts-by" id="ts-pros-by"></p>
+  <div class="pv-actions manager-only"><label>Assign to <select id="ts-rep"></select></label><button type="button" class="btn primary" id="ts-assign">Assign Leads</button></div>
+  <div class="pv-actions"><button type="button" class="btn" id="ts-clear">Clear</button><button type="button" class="btn" id="ts-more">More…</button></div>
 </div></div>
 <div id="update-banner" class="update-banner" role="button" tabindex="0" hidden><span id="update-text">Update Ready — Tap to Refresh</span></div>
 <div id="modal-signin" class="modal" role="dialog" aria-label="Sign in"><form id="signin-form" class="sheet"><div class="sheet-head"><h2 id="signin-title">Who's knocking?</h2></div>

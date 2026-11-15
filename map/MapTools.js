@@ -127,7 +127,7 @@
     q = q.trim().toLowerCase(); const out = $('#search-results'); out.innerHTML = ''; geoSeq++;
     $('#search-geo').hidden = q.length < 3;
     if (q.length < 2) return [];
-    const hits = DF.sync.all().filter(r => DF.inCampaign(r) && [r.address, r.apt, r.first_name, r.last_name, r.zip, r.city, r.rep_note].join(' ').toLowerCase().includes(q)).slice(0, 6);
+    const hits = DF.sync.all().filter(r => DF.inCampaign(r) && (DF.isManager() || DF.filters.repKey(r) === DF.auth.id) && [r.address, r.apt, r.first_name, r.last_name, r.zip, r.city, r.rep_note].join(' ').toLowerCase().includes(q)).slice(0, 6);
     hits.forEach(r => { const li = document.createElement('li'); li.innerHTML = '<b>' + DF.esc(r.address + (r.apt ? ' ' + r.apt : '')) + '</b><span>' + DF.esc([r.first_name, r.last_name].join(' ').trim() || r.city) + '</span>';
       li.addEventListener('click', () => { $('#search-bar').classList.remove('open'); DF.map.jumpTo(r.lead_id); }); out.appendChild(li); });
     return hits;
