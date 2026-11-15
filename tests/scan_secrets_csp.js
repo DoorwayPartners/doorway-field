@@ -4,15 +4,19 @@
 const fs = require('fs'), path = require('path');
 const { APP, FIX, fixture } = require('./field_harness.js');
 const MENU = ['NEW', 'NH1', 'NH2', 'NH3', 'GB', 'P_GB', 'SOLD', 'NI', 'APPT', 'PVL'];
+const DIRS = ['core', 'map', 'ui'];   // v2.5 layout: modules by responsibility; only config / sw / index / styles at the app root
+const appFiles = re => fs.readdirSync(APP).filter(f => re.test(f)).concat(...DIRS.filter(d => fs.existsSync(path.join(APP, d))).map(d => fs.readdirSync(path.join(APP, d)).filter(f => re.test(f)).map(f => d + '/' + f)));
 function scan(ok) {
   console.log('Guardrails');
   const tests = fs.readdirSync(__dirname).filter(f => /\.js$/.test(f)).map(f => path.join(__dirname, f));
   const SRV = path.join(__dirname, '..', 'server'), srv = fs.existsSync(SRV) ? fs.readdirSync(SRV).filter(f => /\.gs$/.test(f)).map(f => path.join(SRV, f)) : [];
-  const files = fs.readdirSync(APP).filter(f => /\.(js|html|css|webmanifest|svg)$/.test(f)).map(f => path.join(APP, f)).concat(tests, [FIX], srv);
+  const files = appFiles(/\.(js|html|css|webmanifest|svg)$/).map(f => path.join(APP, f)).concat(tests, [FIX], srv);
+  const rootJs = fs.readdirSync(APP).filter(f => /\.js$/.test(f)).sort().join();
+  ok(DIRS.every(d => fs.existsSync(path.join(APP, d))) && /^(config\.env\.js,)?config\.public\.js,sw\.js$/.test(rootJs), 'modules live in core/ map/ ui/ (root: config + service worker only)', rootJs);
   ok(!srv.filter(f => { const s = fs.readFileSync(f, 'utf8'); return /AKfycb|AIza[0-9A-Za-z_-]{20}|[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z]{2,}|['"][A-Za-z0-9_-]{33,}['"]/.test(s); }).length, 'server/*.gs: zero secrets, IDs or emails (Script Properties only)');
   const limit = f => /OfflineSync\.js$/.test(f) ? 250 : /tests[\\/]test_.*\.js$/.test(f) ? 350 : 300;   // golden test files: owner cap 350; app modules < 300
   files.forEach(f => { const n = fs.readFileSync(f, 'utf8').split('\n').length - 1; ok(n < limit(f), path.basename(f) + ' ' + n + ' lines < ' + limit(f)); });
-  const code = fs.readdirSync(APP).filter(f => /\.(js|html|css|webmanifest)$/.test(f)).map(f => [f, fs.readFileSync(path.join(APP, f), 'utf8')]);
+  const code = appFiles(/\.(js|html|css|webmanifest)$/).map(f => [f, fs.readFileSync(path.join(APP, f), 'utf8')]);
   ok(!code.filter(([f, s]) => !f.endsWith('.css') && /\sstyle\s*=|\.style\b|setAttribute\(\s*['"]style|cssText/.test(s)).length, 'zero inline styles (no style=, .style, cssText)');
   ok(!code.filter(([f, s]) => !(process.env.FIELD_PUBLISHED === '1' && f === 'config.env.js') && /AKfycb|AIza[0-9A-Za-z_-]{20}|ya29\.|BEGIN [A-Z ]*PRIVATE KEY|client_secret|['"](?=[\w-]*\d)(?=[\w-]*[A-Z])[\w-]{25,}['"]/.test(s)).length, 'zero secrets / Drive-Sheet-Script IDs in app source (published config.js may hold the public Sync URL)');
   const emails = code.filter(([, s]) => /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z]{2,}/.test(s)).map(x => x[0]);
@@ -29,6 +33,9 @@ function scan(ok) {
   ok(names.length <= 3 && names.every(n => n === 'Cristian Coy' || /^(Manager|Agent) \d+$/.test(n)), 'public roster seed = Owner + generic roles only (real names live in Admin / private Sync)', names);
   ok(fixture.pins.every(p => /^(agent|manager)-\d+$/.test(p.assigned_rep_email || 'agent-0')), 'fixture reps are generic roster ids');
   ok(/API_URL: ''/.test(cfg), 'config.public.js ships with a blank Sync URL (the live one lives in config.env.js)');
+  const ver = JSON.parse(fs.readFileSync(path.join(APP, 'version.json'), 'utf8')).version, sw = fs.readFileSync(path.join(APP, 'sw.js'), 'utf8');
+  ok(ver && cfg.includes("VERSION: '" + ver + "'") && sw.includes("df-shell-" + ver + "'") && html.split('<script src="').slice(1).every(s => { const f = s.split('"')[0]; return /^https:|^config\.env\.js$/.test(f) || (fs.existsSync(path.join(APP, f)) && sw.includes("'" + f + "'")); }),
+    'version.json = VERSION = SW cache name; every script tag exists and is precached', ver);
   const fx = fixture.pins, codes = new Set(fx.map(p => p.status_code));
   ok(fx.length === 50 && fx.every(p => /@example\.com$/.test(p.email) && /^207-555-01\d\d$/.test(p.phone) && p.campaign), 'fixture: 50 synthetic pins with campaigns');
   ok(MENU.every(c => codes.has(c)), 'fixture covers the 10 Lead Menu codes');

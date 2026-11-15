@@ -4,7 +4,7 @@
 const path = require('path'), fs = require('fs'), crypto = require('crypto');
 const { makeGas } = require('./gas_mock.js');
 const ROOT = path.resolve(__dirname, '..'), SRV = path.join(ROOT, 'server', 'FieldApi.gs');
-const APPJS = fs.existsSync(path.join(ROOT, 'app', 'app.js')) ? path.join(ROOT, 'app', 'app.js') : path.join(ROOT, 'app.js');
+const APPJS = [path.join(ROOT, 'app', 'core', 'app.js'), path.join(ROOT, 'core', 'app.js')].find(f => fs.existsSync(f));
 let pass = 0, fail = 0;
 const ok = (c, name, info) => { if (c) { pass++; console.log('  ✓ ' + name); } else { fail++; console.log('  ✗ ' + name + (info !== undefined ? '  → ' + JSON.stringify(info).slice(0, 400) : '')); } };
 const DFhash = eval('(' + /DF\.hash = (s => \{[\s\S]*?\});/.exec(fs.readFileSync(APPJS, 'utf8'))[1] + ')');   // the client's own PIN hash

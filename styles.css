@@ -104,13 +104,6 @@ h3 { margin: 22px 0 8px; font-size: 15px; text-transform: uppercase; letter-spac
 .sheet-head h2 { margin: 0; font-size: 19px; }
 .sheet label { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; font-size: 13px; color: var(--muted); }
 .sheet label input { border: 1px solid var(--line); border-radius: 10px; padding: 11px; color: var(--ink); font-size: 16px; }
-.mode-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.mode-card { border: 2px solid var(--line); background: #fff; border-radius: 14px; padding: 6px; display: flex; flex-direction: column; gap: 6px; font-weight: 600; font-size: 13px; }
-.mode-card.active { border-color: var(--red); color: var(--red); }
-.thumb { display: block; height: 70px; border-radius: 10px; }
-.thumb-street { background: linear-gradient(135deg, #f4f1ea 0 45%, #fff 45% 52%, #e8e4da 52% 100%), #f4f1ea; }
-.thumb-satellite { background: radial-gradient(circle at 30% 40%, #5b7244 0 18%, transparent 19%), radial-gradient(circle at 70% 70%, #3e5530 0 22%, transparent 23%), linear-gradient(135deg, #4a5d3a, #6d7f55); }
-.thumb-hybrid { background: linear-gradient(90deg, transparent 47%, rgba(255, 255, 255, .85) 47% 53%, transparent 53%), radial-gradient(circle at 70% 70%, #3e5530 0 22%, transparent 23%), linear-gradient(135deg, #4a5d3a, #6d7f55); }
 .dtabs { display: flex; background: var(--soft); border-radius: 12px; padding: 3px; margin-bottom: 12px; }
 .dtab { flex: 1; border: 0; background: none; border-radius: 10px; padding: 8px; font-weight: 600; color: var(--muted); }
 .dtab.active { background: #fff; color: var(--ink); box-shadow: 0 1px 4px rgba(0, 0, 0, .12); }

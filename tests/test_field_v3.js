@@ -59,7 +59,52 @@ const { ok, newPage, ready, tap, OWNER, api } = H;
     await page.click('#followups li[data-id="' + fuIds[2] + '"] .fu-jump'); await page.waitForTimeout(700);
     const jumped = await page.evaluate(id => DF.currentTab === 'map' && DF.card.current() === id, fuIds[2]);
     ok(fu.visible && fu.apptOrder && fu.streets >= 1 && fu.nav && fu.hasGb && fu.count === String(fu.n) && jumped, 'Follow-Ups: APPT by appointment time, P GB / GB grouped by street, navigation on every row, 1-tap jump to the pin', fu);
+    // ---- v2.5: pink finger lasso → Assign Turf ----
+    await page.evaluate(async () => { DF.card.close(); DF.showTab('map'); const f = DF.sync.all().find(r => r.campaign === 'Fidium');
+      DF.map.instance.jumpTo({ center: [f.lng, f.lat], zoom: 17 }); await new Promise(r => setTimeout(r, 300)); });
+    await page.click('#pill-lasso');
+    const arm = await page.evaluate(() => ({ pink: DF.$('#pill-lasso').classList.contains('turf-draw'), badge: !DF.$('#turf-badge').hidden && /Draw turf with your finger/.test(DF.$('#turf-badge').textContent), pan: DF.map.instance.dragPan.isEnabled() }));
+    const mc = await page.evaluate(() => { const b = DF.$('#map').getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2, Math.min(b.width, b.height) * 0.42]; });
+    await page.mouse.move(mc[0] + mc[2], mc[1]); await page.mouse.down();
+    for (let d = 0; d <= 360; d += 15) await page.mouse.move(mc[0] + mc[2] * Math.cos(d * Math.PI / 180), mc[1] + mc[2] * Math.sin(d * Math.PI / 180));
+    const live = await page.evaluate(() => { const f = DF.map.instance.getSource('turf-draw')._data; return f && f.geometry ? f.geometry.coordinates.length : 0; });
+    await page.mouse.up(); await page.waitForTimeout(300);
+    const ts = await page.evaluate(() => ({ open: DF.$('#turf-sheet').classList.contains('open'), n: DF.turflasso.ids().length, count: DF.$('#ts-count').textContent, pan: DF.map.instance.dragPan.isEnabled(),
+      pink: DF.$('#pill-lasso').classList.contains('turf-draw'), badge: !DF.$('#turf-badge').hidden, color: DF.map.instance.getPaintProperty('turf-draw', 'line-color') }));
+    await page.selectOption('#ts-rep', 'agent-1'); await page.selectOption('#ts-camp', 'Fidium'); const want = await page.evaluate(() => DF.turflasso.count());
+    await page.click('#ts-save'); await page.waitForTimeout(250);
+    const sv = await page.evaluate(ids => { const z = DF.turf.all().slice(-1)[0], fid = ids.filter(id => DF.sync.get(id).campaign === 'Fidium');
+      return { assigned: fid.length && fid.every(id => DF.sync.get(id).assigned_rep_email === 'agent-1'), zone: z && z.rep === 'agent-1' && z.campaign === 'Fidium' && z.poly.length >= 3, n: fid.length, closed: !DF.$('#turf-sheet').classList.contains('open') }; }, await page.evaluate(() => DF.lasso.ids().length ? DF.lasso.ids() : DF.sync.all().map(r => r.lead_id).filter(id => DF.sync.get(id).assigned_rep_email === 'agent-1')));
+    ok(arm.pink && arm.badge && !arm.pan && live > 5 && ts.open && ts.n > 0 && /^\d+ doors?$/.test(ts.count) && ts.pan && !ts.pink && !ts.badge && ts.color === '#ec4899' && want > 0 && sv.assigned && sv.zone && sv.closed,
+      'pink finger lasso: pink toggle + 👆 badge + panning paused, live pink stroke, auto-close → Assign Turf (count · rep · campaign) → Save Turf assigns + saves the zone', { arm, live, ts, want, sv });
+    // ---- v2.5: 2-mode GPS ----
+    await page.click('#pill-gps'); await page.waitForFunction(() => DF.gps.following && DF.gps.watching, null, { timeout: 8000 }); await page.waitForTimeout(700);
+    const g1 = await page.evaluate(() => ({ cls: DF.$('#pill-gps').className, label: DF.$('#pill-gps').getAttribute('aria-label') }));
+    await page.mouse.move(mc[0], mc[1]); await page.mouse.down(); await page.mouse.move(mc[0] + 80, mc[1] + 40, { steps: 6 }); await page.mouse.up(); await page.waitForTimeout(200);
+    const g2 = await page.evaluate(() => ({ following: DF.gps.following, watching: DF.gps.watching, cls: DF.$('#pill-gps').className }));
+    await page.click('#pill-gps'); await page.waitForTimeout(300); const g3 = await page.evaluate(() => DF.gps.following); await page.evaluate(() => DF.gps.follow(false));
+    ok(/gps-follow/.test(g1.cls) && g1.label === 'Following GPS' && !g2.following && g2.watching && /gps-live/.test(g2.cls) && g3, 'GPS: tap = watch + fly + Following GPS (blue); a pan unlocks the camera but the dot keeps updating; tap snaps back', { g1, g2, g3 });
+    // ---- v2.5: Team & Logins ----
+    await page.click('.tab[data-tab=admin]');
+    const tm0 = await page.evaluate(() => ({ rows: DF.$$('#team-body tr').length, roster: DF.roster.all().length, form: !DF.$('#team-form').hidden, ownerInv: !DF.$('#team-body tr[data-id="cristian-coy"] .tm-inv') }));
+    await page.fill('#tm-name', 'Rep Dos'); await page.selectOption('#tm-role', 'Agent'); await page.selectOption('#tm-camp', 'AT&T Fiber'); await page.fill('#tm-pin', '2468'); await page.click('#team-form button[type=submit]'); await page.waitForTimeout(250);
+    const tm1 = await page.evaluate(() => { const r = DF.roster.get('rep-dos'), row = DF.$('#team-body tr[data-id="rep-dos"]'), ev = DF.sync.events().filter(e => e.type === 'roster').pop();
+      return { pin: r && r.pin === DF.hash('rep-dos:2468'), dc: r && r.defaultCampaign, first: r && r.campaigns[0], row: row && row.textContent, ev: !!(ev && ev.roster.some(x => x.id === 'rep-dos' && x.pin)) }; });
+    await page.click('#team-body tr[data-id="rep-dos"] .tm-inv'); await page.waitForFunction(() => /token=/.test(DF.$('#invite-out').value));
+    const tm2 = await page.evaluate(() => ({ toast: DF.$('#toast-msg').textContent, copied: window.__copied.slice(-1)[0] || '' }));
+    ok(tm0.rows === tm0.roster && tm0.form && tm0.ownerInv && tm1.pin && tm1.dc === 'AT&T Fiber' && tm1.first === 'AT&T Fiber' && /Rep Dos.*Agent.*AT&T Fiber.*Active · PIN set/.test(tm1.row) && tm1.ev && tm2.toast === 'Invite Link Copied!' && /\?token=/.test(tm2.copied),
+      'Team & Logins: roster table + Add / Update Rep (role, default campaign, 4-digit PIN → Field API roster) + 1-tap Copy Invite Link', { tm0, tm1, tm2 });
     ok(!errors.length && !(await page.evaluate(() => window.__csp.length)), 'no page errors, zero CSP violations (v2.4.4 run)', errors.slice(0, 3));
+    // ---- v2.5: zero-clear-data updater (last on this page: it reloads) ----
+    await context.route(/version\.json/, r => r.fulfill({ json: { version: '9.9.9', build: 'test' } }));
+    await page.evaluate(() => DF.pwa.checkVersion()); await page.waitForTimeout(150);
+    const up0 = await page.evaluate(async () => { await (await caches.open('df-shell-old')).put('/stale.js', new Response('old')); await (await caches.open('df-tiles-keep')).put('/t.png', new Response('t'));
+      return { text: DF.$('#update-text').textContent, shown: !DF.$('#update-banner').hidden, leads: DF.sync.count() }; });
+    await context.unroute(/version\.json/);
+    await Promise.all([page.waitForNavigation(), page.click('#update-banner')]); await ready(page);
+    const up1 = await page.evaluate(async () => ({ keys: (await caches.keys()).join(), leads: DF.sync.count(), sess: !!(DF.store.get('session') || {}).token, banner: DF.$('#update-banner').hidden }));
+    ok(up0.text === 'Update v9.9.9 Ready — Tap to Refresh' && up0.shown && !/df-shell-old/.test(up1.keys) && /df-tiles-keep/.test(up1.keys) && up1.leads === up0.leads && up1.sess && up1.banner,
+      'auto-updater: version.json ≠ running build → top banner; tap = stale static caches dropped + reload, leads / session / tile cache kept', { up0, up1 });
     await context.close();
 
     console.log('Roster-name sign-in');
@@ -75,6 +120,17 @@ const { ok, newPage, ready, tap, OWNER, api } = H;
     ok(opts === 'Cristian Coy=cristian-coy|Rep Uno=agent-1|Other rep: enter Rep ID=__id' && st.id === 'agent-1' && st.camp === 'Fidium' && /Fidium/.test(st.pill) && st.sess && synced,
       'sign-in lists full roster names (placeholder seats hidden): tap name + PIN (server-checked) → default campaign + immediate authorized sync', { opts, st, synced });
     await nm.context.close();
+
+    console.log('Sign-in prompt + GPS permission (v2.5)');
+    const sp = await newPage(L.browser, L.base, { user: H.AGENT_A, noSession: true }); await sp.page.waitForSelector('#modal-signin.open', { timeout: 15000 });
+    const sp0 = await sp.page.evaluate(() => ({ banner: !DF.$('#signin-banner').hidden && DF.$('#signin-banner').textContent, sel: DF.$('#signin-name').value }));
+    await sp.page.fill('#signin-pin', '1357'); await sp.page.click('#signin-form button[type=submit]'); await ready(sp.page);
+    const sp1 = await sp.page.evaluate(() => ({ id: DF.auth.id, sess: !!(DF.store.get('session') || {}).token })); await sp.context.close();
+    ok(sp0.banner === 'Sign in to sync your turf & knocks' && sp0.sel === 'agent-1' && sp1.id === 'agent-1' && sp1.sess, 'no valid session on boot → "Who\'s knocking?" opens with the sync banner (rep preselected) → PIN → session', { sp0, sp1 });
+    const ng = await newPage(L.browser, L.base, { user: OWNER, noGeo: true }); await ready(ng.page);
+    await ng.page.click('#pill-gps'); await ng.page.waitForTimeout(800);
+    const ngs = await ng.page.evaluate(() => ({ toast: DF.$('#toast-msg').textContent, following: DF.gps.following })); await ng.context.close();
+    ok(ngs.toast === 'Enable Location permission in browser settings for GPS' && !ngs.following, 'GPS permission denied → clear non-blocking toast (no silent failure)', ngs);
 
     console.log('Stability (v2.4.5)');
     const hg = await newPage(L.browser, L.base, { user: OWNER, hang: /mt\d\.google\.com/ }); await ready(hg.page); const t0 = Date.now();

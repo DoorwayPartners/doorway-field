@@ -30,7 +30,7 @@ fi
 [ -f config.env.js ] || die "config.env.js missing: cp config.env.example.js config.env.js and set API_URL (one time; deploys never touch it)"
 node tests/check_env.js config.env.js --require-api || die "config.env.js needs the live Field API /exec URL in API_URL (v2.4.1+ sign-in is server-checked: deploy server/FieldApi.gs first, see MANIFEST.server)"
 find "$FIELD_PAGES_REPO" -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-cp app/* "$FIELD_PAGES_REPO/" && cp config.env.js "$FIELD_PAGES_REPO/config.env.js" && echo "$FIELD_DOMAIN" > "$FIELD_PAGES_REPO/CNAME"
+cp -r app/. "$FIELD_PAGES_REPO/" && cp config.env.js "$FIELD_PAGES_REPO/config.env.js" && echo "$FIELD_DOMAIN" > "$FIELD_PAGES_REPO/CNAME"
 # tests + workflow ride along so GitHub Actions (auto-gate.yml) re-runs the gate on every push ($0 on a public repo)
 cp -r tests package.json field_gate.sh .gitignore "$FIELD_PAGES_REPO/" && mkdir -p "$FIELD_PAGES_REPO/.github/workflows" && cp .github/workflows/auto-gate.yml "$FIELD_PAGES_REPO/.github/workflows/"
 git -C "$FIELD_PAGES_REPO" add -A

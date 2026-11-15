@@ -135,15 +135,18 @@
   }
   // ---- sign-in (v2.4.1 auth lock): a new phone needs an invite token OR Rep ID + PIN. Only reps whose PIN is on this phone (and the invited rep) are
   // listed; nobody can pick a placeholder name without a PIN. A rep with no PIN yet (fresh invite) must set one. ----
-  function signIn(inv) {
+  function signIn(inv, opts) {
+    opts = opts || {};
     return new Promise(resolve => {
-      const saved = DF.store.get('user', null);
-      if (!inv && !DF.inviteMsg && saved && saved.id && setUser(saved.id)) return resolve();      // cached session on this phone
-      const sel = DF.$('#signin-name'), online = !!DF.sync.syncUrl(), err = m => { DF.$('#signin-err').textContent = m; };
+      const saved = DF.store.get('user', null), online = !!DF.sync.syncUrl() && navigator.onLine !== false;
+      // v2.5: a cached name alone is not enough when online: no valid session → the sheet opens with a clear banner (offline: keep working)
+      if (!inv && !DF.inviteMsg && !opts.force && saved && saved.id && (session() || !online) && setUser(saved.id)) return resolve();
+      const sel = DF.$('#signin-name'), err = m => { DF.$('#signin-err').textContent = m; };
+      DF.$('#signin-banner').hidden = !(opts.banner || (!inv && saved && saved.id));
       const generic = r => /^(Manager|Agent) \d+$/.test(r.name) && !r.pin;                 // public placeholder seats are never offered
-      const listed = DF.roster.all().filter(r => (inv && r.id === inv.id) || r.pin || (online && !generic(r)));   // tap your name + PIN
+      const listed = DF.roster.all().filter(r => (inv && r.id === inv.id) || (saved && r.id === saved.id) || r.pin || (online && !generic(r)));   // tap your name + PIN
       sel.innerHTML = listed.sort((a, b) => a.name.localeCompare(b.name)).map(r => '<option value="' + DF.esc(r.id) + '">' + DF.esc(r.name) + '</option>').join('') + (online ? '<option value="__id">Other rep: enter Rep ID</option>' : '');
-      if (inv) { sel.value = inv.id; DF.$('#signin-title').textContent = 'Welcome, ' + inv.name.split(' ')[0]; }
+      if (inv) { sel.value = inv.id; DF.$('#signin-title').textContent = 'Welcome, ' + inv.name.split(' ')[0]; } else if (saved && DF.roster.get(saved.id)) sel.value = saved.id;
       err(DF.inviteMsg || (!listed.length && !online ? 'This phone is not set up yet: open your invite link.' : ''));
       const showPin = () => { const other = sel.value === '__id', r = other ? null : DF.roster.get(sel.value);
         DF.$('#signin-id-row').hidden = !other; DF.$('#signin-pin-row').hidden = !(other || r); DF.$('#signin-pin-label').textContent = r && !r.pin && inv && r.id === inv.id ? 'Set your PIN (4-8 digits)' : 'PIN'; };
@@ -180,8 +183,9 @@
       };
     });
   }
-  let authNagged = false;
-  DF.bus.on('sync:auth', () => { if (authNagged) return; authNagged = true; DF.toast('Sync paused: sign in again with your PIN', 'Sign in', DF.signOut, 12000); });
+  // server said 401 / auth: open the sign-in sheet right away (banner), then sync. Data on the phone is kept.
+  DF.reauth = () => { if (DF.$('#modal-signin').classList.contains('open')) return; DF.store.set('session', null); signIn(null, { force: true, banner: true }).then(() => DF.sync.flush()); };
+  DF.bus.on('sync:auth', DF.reauth);
 
   // ---- 4-tab nav ----
   DF.showTab = function (name) {
@@ -204,7 +208,7 @@
       catch (e) { console.error('[DF] fixture', e); }
     }
     await signIn(await takeInvite());
-    ['card', 'filters', 'list', 'stats', 'lasso', 'imports', 'admin', 'pins', 'turf', 'pwa', 'cardplus', 'followups'].forEach(m => DF[m] && DF[m].init && DF[m].init());
+    ['card', 'filters', 'list', 'stats', 'lasso', 'imports', 'admin', 'adminRoster', 'pins', 'turf', 'pwa', 'cardplus', 'followups'].forEach(m => DF[m] && DF[m].init && DF[m].init());
     DF.map.init('map');
     DF.tools.init();
     DF.sync.startAuto();

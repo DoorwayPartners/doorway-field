@@ -1,12 +1,11 @@
-// Doorway Field v2.0 — MapTools: pills (Filters, Search, Lasso, Multi-Select, Rapid-Stamp | Layers, Drop Pin, Compass, Follow Me),
-// long-press radial status wheel (drops a reverse-geocoded pin stamped with the active campaign), Rapid-Stamp mode,
-// freehand or tap-corner lasso (temporary: cleared when its sheet closes). Foreground GPS only; Follow Me stops when hidden.
+// Doorway Field v2.5 — MapTools: pills (Filters, Search, Multi-Select, Rapid-Stamp | basemap menu, + Add Pin, Compass), long-press radial status wheel
+// (drops a reverse-geocoded pin stamped with the active campaign), Rapid-Stamp, search, point-in-polygon helpers. Turf lasso → TurfLasso.js, GPS → GpsTracker.js.
 (function () {
   'use strict';
   const DF = window.DF;
   const $ = s => DF.$(s);
-  let lastFix = null;   // { ll, acc, ts } from any foreground GPS read
-  let lasso = null, freehand = null, skipClick = false, multi = false, dropArmed = false, stamp = null, wheelAt = null, watchId = null, lastPos = null, pressTimer = null;
+  let skipClick = false, multi = false, dropArmed = false, stamp = null, wheelAt = null, pressTimer = null;
+  const drawing = () => !!(DF.turflasso && DF.turflasso.active());
   const geoCache = new Map(); let geoLast = 0;
   const armSkip = () => { skipClick = true; setTimeout(() => { skipClick = false; }, 400); };   // swallow only the click that follows a drag / long-press
 
@@ -52,43 +51,27 @@
   }
   function closeWheel() { wheelAt = null; $('#wheel').classList.remove('open'); }
 
-  // ---- lasso: freehand drag (or tap corners + Done). Opens the breakdown sheet; the shape is cleared when the sheet closes. ----
+  // ---- point-in-polygon + programmatic lasso (the finger lasso itself lives in TurfLasso.js) ----
   const pip = (pt, poly) => { let inside = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const [xi, yi] = poly[i], [xj, yj] = poly[j]; if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi) inside = !inside; } return inside; };
   const pointsIn = poly => DF.sync.all().filter(r => DF.map.visible(r) && pip([r.lng, r.lat], poly)).map(r => r.lead_id);
-  function lassoCount() { const n = lasso ? lasso.length : 0; $('#lasso-count').textContent = n ? n + ' corner' + (n === 1 ? '' : 's') + (n >= 3 ? ' · ' + pointsIn(lasso).length + ' doors' : '') : 'Drag a circle around doors, or tap corners'; }
-  function startLasso() { lasso = []; DF.showTab('map'); DF.bus.emit('map:blank'); $('#lasso-bar').classList.add('open'); $('#pill-lasso').classList.add('active'); DF.map.drawLasso([]); lassoCount(); }
-  function endLasso(keepShape) { lasso = null; freehand = null; DF.map.instance.dragPan.enable(); $('#lasso-bar').classList.remove('open'); $('#pill-lasso').classList.remove('active'); if (!keepShape) DF.map.drawLasso([]); }
-  function finishLasso(poly) {
-    poly = poly || (lasso || []).slice(); endLasso(true);
-    if (poly.length < 3) { DF.map.drawLasso([]); return []; }
+  function finishLasso(poly) {                                           // full breakdown sheet for a given polygon
+    if (!poly || poly.length < 3) { DF.map.drawLasso([]); return []; }
     DF.map.drawLasso(poly);
     const ids = pointsIn(poly); DF.map.select(ids); DF.lasso.open(ids, 'Lasso', poly);
     return ids;
-  }
-  function bindFreehand() {
-    const el = DF.map.instance.getCanvasContainer(), m = DF.map.instance;
-    const pt = e => { const r = el.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
-    el.addEventListener('pointerdown', e => { if (!lasso) return; m.dragPan.disable(); freehand = { px: [pt(e)], ll: [m.unproject(pt(e)).toArray()] }; });
-    el.addEventListener('pointermove', e => {
-      if (!lasso || !freehand) return;
-      const p = pt(e), last = freehand.px[freehand.px.length - 1];
-      if (Math.hypot(p[0] - last[0], p[1] - last[1]) < 6) return;
-      freehand.px.push(p); freehand.ll.push(m.unproject(p).toArray()); DF.map.drawLasso(freehand.ll);
-    });
-    el.addEventListener('pointerup', () => { if (!lasso || !freehand) return; const f = freehand; freehand = null; m.dragPan.enable(); if (f.ll.length >= 8) { armSkip(); finishLasso(f.ll); } });
   }
 
   // ---- long press (touch hold 550 ms, or right-click / contextmenu) ----
   function bindLongPress() {
     const m = DF.map.instance, cancel = () => { clearTimeout(pressTimer); pressTimer = null; };
-    m.on('touchstart', e => { if (lasso || (e.originalEvent.touches || []).length > 1) return cancel(); const ll = e.lngLat; cancel(); pressTimer = setTimeout(() => { pressTimer = null; armSkip(); openWheel(ll); }, 550); });
+    m.on('touchstart', e => { if (drawing() || (e.originalEvent.touches || []).length > 1) return cancel(); const ll = e.lngLat; cancel(); pressTimer = setTimeout(() => { pressTimer = null; armSkip(); openWheel(ll); }, 550); });
     ['touchend', 'touchmove', 'movestart', 'zoomstart'].forEach(ev => m.on(ev, cancel));
-    m.on('contextmenu', e => { if (!lasso) openWheel(e.lngLat); });
+    m.on('contextmenu', e => { if (!drawing()) openWheel(e.lngLat); });
   }
 
   // ---- what a tap means right now (called by MapEngine) ----
   function pinTap(id) {
-    if (lasso || wheelAt) return true;
+    if (drawing() || wheelAt) return true;
     if (stamp) { DF.card.dispose(id, stamp, { source: 'stamp' }); return true; }
     if (multi) { const s = new Set(DF.map.selected()); s.has(id) ? s.delete(id) : s.add(id); DF.map.select(Array.from(s)); return true; }
     return false;
@@ -97,7 +80,7 @@
     if (skipClick) { skipClick = false; return true; }
     if (wheelAt) { closeWheel(); return true; }
     if (dropArmed) { openWheel(e.lngLat); return true; }
-    if (lasso) { lasso.push([e.lngLat.lng, e.lngLat.lat]); DF.map.drawLasso(lasso); lassoCount(); return true; }
+    if (drawing()) return true;
     if (stamp) { createPinAt(e.lngLat, stamp); return true; }
     return multi;
   }
@@ -111,77 +94,11 @@
     DF.$$('#stamp-items .dispo').forEach(b => b.addEventListener('click', () => setStamp(stamp === b.dataset.code ? null : b.dataset.code)));
   }
 
-  // ---- rep location (v2.4.2): blue dot + accuracy ring only from a REAL fix; Locate Me = immediate high-accuracy fix + fly; GPS pauses when hidden ----
-  const GPS_OPTS = { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }, JITTER_M = 4;
-  let pausedFollow = false;
-  const meters = (a, b) => { const k = Math.PI / 180, x = (b[0] - a[0]) * k * Math.cos((a[1] + b[1]) * k / 2), y = (b[1] - a[1]) * k; return Math.hypot(x, y) * 6371000; };
-  function ring(ll, acc) {                                              // accuracy circle as a 48-point polygon (metres → degrees)
-    const r = Math.min(Math.max(acc || 0, 3), 2000), pts = [];
-    for (let i = 0; i <= 48; i++) { const t = i / 48 * 2 * Math.PI; pts.push([ll[0] + r * Math.cos(t) / (111320 * Math.cos(ll[1] * Math.PI / 180)), ll[1] + r * Math.sin(t) / 110540]); }
-    return pts;
-  }
-  function drawMe() {
-    const s = DF.map.instance && DF.map.instance.getSource('me'); if (!s) return;
-    s.setData({ type: 'FeatureCollection', features: lastPos ? [{ type: 'Feature', geometry: { type: 'Polygon', coordinates: [ring(lastPos, lastFix && lastFix.acc)] }, properties: {} },
-      { type: 'Feature', geometry: { type: 'Point', coordinates: lastPos }, properties: {} }] : [] });
-  }
-  // every GPS reading goes through here: ignore < 4 m micro-jitter (rep standing at a door) unless accuracy clearly improved
-  function onFix(c) {
-    const ll = [c.longitude, c.latitude], now = Date.now();
-    if (lastPos && lastFix && meters(lastPos, ll) < JITTER_M && !(c.accuracy < lastFix.acc - 3)) { lastFix.ts = now; return false; }
-    lastPos = ll; lastFix = { ll, acc: c.accuracy, ts: now }; drawMe();
-    return true;
-  }
-  function follow(on) {
-    if (on === undefined) on = watchId === null;
-    if (on && navigator.geolocation && watchId === null) {
-      watchId = navigator.geolocation.watchPosition(p => { if (onFix(p.coords)) DF.map.instance.easeTo({ center: lastPos, zoom: Math.max(DF.map.instance.getZoom(), 17), duration: 500 }); },
-        () => { DF.toast('Location unavailable'); follow(false); }, GPS_OPTS);
-    } else if (!on && watchId !== null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
-    DF.tools.following = watchId !== null; $('#pill-gps').classList.toggle('active', DF.tools.following);
-  }
-  function locateMe() {                                                 // tap: fresh high-accuracy fix → fly there → keep following; tap again = stop
-    if (watchId !== null) return follow(false);
-    if (!navigator.geolocation) { DF.toast('Location unavailable'); return Promise.resolve(null); }
-    return new Promise(res => navigator.geolocation.getCurrentPosition(p => {
-      onFix(p.coords); lastPos = [p.coords.longitude, p.coords.latitude]; lastFix = { ll: lastPos, acc: p.coords.accuracy, ts: Date.now() }; drawMe();
-      DF.map.moved = true; DF.map.instance.flyTo({ center: lastPos, zoom: Math.max(DF.map.instance.getZoom(), 17), bearing: 0, duration: 600 });
-      follow(true); res(lastPos);
-    }, () => { DF.toast('Location unavailable: check location permission'); res(null); }, { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }));
-  }
-  function onVisibility() {
-    if (document.visibilityState === 'hidden') { pausedFollow = watchId !== null; follow(false); }
-    else if (pausedFollow) { pausedFollow = false; follow(true); }        // resume right away when the screen comes back
-  }
-  function locateOnce(maxAge) {
-    return new Promise(res => {
-      if (!navigator.geolocation) return res(null);
-      navigator.geolocation.getCurrentPosition(p => { onFix(p.coords); res({ ll: [p.coords.longitude, p.coords.latitude], acc: p.coords.accuracy }); },
-        () => res(null), { enableHighAccuracy: true, maximumAge: maxAge == null ? 30000 : maxAge, timeout: 8000 });
-    });
-  }
-  // Knock GPS: always ask for a FRESH fix (maximumAge 0). If none arrives within `ms` (default 800), fall back to the latest cached fix,
-  // flagged 'cached' with its age, so a stale position is never logged as if it were fresh.
-  function locateFresh(ms) {
-    ms = ms || 800;
-    return new Promise(res => {
-      if (!navigator.geolocation) return res(null);
-      let done = false;
-      const cached = () => lastFix ? { ll: lastFix.ll, acc: lastFix.acc, fix: 'cached', age_s: Math.round((Date.now() - lastFix.ts) / 1000) } : null;
-      const t = setTimeout(() => { done = true; res(cached()); }, ms);
-      navigator.geolocation.getCurrentPosition(p => {
-        onFix(p.coords);
-        if (!done) { done = true; clearTimeout(t); res({ ll: [p.coords.longitude, p.coords.latitude], acc: p.coords.accuracy, fix: 'fresh', age_s: 0 }); }
-      }, () => { if (!done) { done = true; clearTimeout(t); res(cached()); } }, { enableHighAccuracy: true, maximumAge: 0, timeout: ms });
-    });
-  }
-  function position() { if (lastPos) return lastPos; const c = DF.map.instance ? DF.map.instance.getCenter() : { lng: 0, lat: 0 }; return [c.lng, c.lat]; }
-
   // ---- + Add Pin: unlisted new builds / extra units at my GPS or the map-centre crosshair ----
   function showAdd(on) { $('#add-bar').classList.toggle('open', on); $('#add-cross').hidden = !on; dropArmed = on; $('#pill-drop').classList.toggle('active', on); }
   async function addPin(where) {
     const unit = $('#add-unit').value.trim().slice(0, 12); let ll;
-    if (where === 'gps') { const f = await locateFresh(800); if (!f) { DF.toast('No GPS fix: use the map centre'); return null; } ll = { lng: f.ll[0], lat: f.ll[1] }; }
+    if (where === 'gps') { const f = await DF.gps.locateFresh(800); if (!f) { DF.toast('No GPS fix: use the map centre'); return null; } ll = { lng: f.ll[0], lat: f.ll[1] }; }
     else { const c = DF.map.instance.getCenter(); ll = { lng: c.lng, lat: c.lat }; }
     const id = await createPinAt(ll, 'NEW', unit, unit ? 'unit' : where);
     if (id) { $('#add-unit').value = ''; showAdd(false); }
@@ -221,9 +138,6 @@
     on('#pill-search', () => { $('#search-bar').classList.toggle('open'); $('#search-input').focus(); });
     $('#search-input').addEventListener('input', e => search(e.target.value));
     on('#search-geo', () => { const q = $('#search-input').value.trim(); if (q.length >= 3) geoSearch(q); });
-    on('#pill-lasso', () => lasso ? endLasso() : startLasso());
-    on('#lasso-done', () => finishLasso());
-    on('#lasso-cancel', () => endLasso());
     on('#pill-multi', () => { multi = !multi; $('#pill-multi').classList.toggle('active', multi); $('#sel-bar').classList.toggle('open', multi); if (multi) DF.bus.emit('map:blank'); else DF.map.select([]); });
     on('#sel-status', () => { if (DF.map.selected().length) DF.lasso.open(DF.map.selected(), 'Selected'); });
     on('#sel-clear', () => DF.map.select([]));
@@ -235,14 +149,14 @@
     on('#pill-drop', () => showAdd(!dropArmed));   // bar explains itself: tap a house, or My GPS / Map centre
     on('#add-gps', () => addPin('gps')); on('#add-center', () => addPin('center')); on('#add-close', () => showAdd(false));
     on('#pill-compass', () => DF.map.instance.easeTo({ bearing: 0, pitch: 0, duration: 300 }));   // N = back to north-up, flat
-    on('#pill-gps', () => locateMe());
     on('#wheel-cancel', closeWheel);
     DF.bus.on('selection:changed', ids => { $('#sel-count').textContent = ids.length + ' selected'; });
     DF.bus.on('statuses:changed', renderStampBar);
-    document.addEventListener('visibilitychange', onVisibility);
-    renderStampBar(); bindFreehand(); bindLongPress();
+    renderStampBar(); bindLongPress();
+    DF.gps.init(); DF.turflasso.init();
   }
 
-  DF.tools = { init, busy: () => !!(lasso || wheelAt || dropArmed), pinTap, mapTap, openWheel, closeWheel, createPinAt, geocode, startLasso, finishLasso, endLasso,
-    pointsIn, pip, setStamp, follow, locateMe, onFix, locateOnce, locateFresh, position, addPin, geoSearch, showAdd, search, following: false, stamp: () => stamp, multi: () => multi };
+  DF.tools = { init, busy: () => !!(drawing() || wheelAt || dropArmed), pinTap, mapTap, openWheel, closeWheel, createPinAt, geocode, finishLasso, armSkip,
+    pointsIn, pip, setStamp, addPin, geoSearch, showAdd, search, stamp: () => stamp, multi: () => multi,
+    locateOnce: m => DF.gps.locateOnce(m), locateFresh: ms => DF.gps.locateFresh(ms), position: () => DF.gps.position() };   // GPS aliases kept for shared_web callers
 })();

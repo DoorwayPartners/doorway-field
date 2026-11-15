@@ -26,12 +26,12 @@
     m.addLayer({ id: 'turf-label', type: 'symbol', source: 'turfs', minzoom: 13, layout: { 'text-field': ['get', 'name'], 'text-font': [DF.cfg.TILES.font], 'text-size': 13 },
       paint: { 'text-color': '#ffffff', 'text-halo-color': 'rgba(0,0,0,0.85)', 'text-halo-width': 1.5 } }, before);
   }
-  async function save(name, rep, poly) {
+  async function save(name, rep, poly, campaign) {
     name = String(name || '').trim().slice(0, 40); poly = poly || shape;
     if (!DF.isManager()) return null;
     if (!name || !poly || poly.length < 3) { DF.toast('Name the zone first'); return null; }
     const r = DF.roster.get(rep), z = { id: 'TZ-' + DF.hash(name + '|' + Date.now()), name, rep: r ? r.id : '', color: r ? r.color : '#e31b23',
-      campaign: DF.campaign === '*' ? '' : DF.campaign, poly: poly.map(p => [+Number(p[0]).toFixed(6), +Number(p[1]).toFixed(6)]), by: DF.auth.id, at: new Date().toISOString() };
+      campaign: campaign !== undefined ? campaign : DF.campaign === '*' ? '' : DF.campaign, poly: poly.map(p => [+Number(p[0]).toFixed(6), +Number(p[1]).toFixed(6)]), by: DF.auth.id, at: new Date().toISOString() };
     await DF.sync.setMeta('turfs', all().concat([z]));
     DF.sync.append({ type: 'turf', turf: z });
     draw(); renderFilter(); DF.toast('Turf zone saved: ' + name);

@@ -1,15 +1,16 @@
 // Doorway Field v2.0 — service worker: app shell offline (cache-first), viewed map tiles cached at runtime (capped),
 // API calls never cached. Background Sync (Android/Chrome only) just asks the open page to flush; iPhone flushes on open.
-const SHELL = 'df-shell-2.4.5';
+const SHELL = 'df-shell-2.5.0';
 const TILES = 'df-tiles-1';
 const TILE_CAP = 3000;   // viewed tiles only (re-panning turf = 0 data); no bulk pre-download (OpenFreeMap / Esri terms). Google tiles: browser HTTP cache only (Google terms)
 let puts = 0;
-const ASSETS = ['./', 'index.html', 'styles.css', 'styles-v2.css', 'config.public.js', 'app.js', 'OfflineSync.js', 'MapEngine.js', 'MapTools.js', 'BottomCard.js', 'FilterDrawer.js',
-  'LassoSheet.js', 'ListView.js', 'StatsView.js', 'LeadImport.js', 'AdminPanel.js', 'PinStudio.js', 'TurfZones.js', 'Pwa.js', 'CardPlus.js', 'FollowUps.js', 'manifest.webmanifest', 'icon.svg',
+const ASSETS = ['./', 'index.html', 'styles.css', 'styles-v2.css', 'config.public.js', 'manifest.webmanifest', 'icon.svg',
+  'core/app.js', 'core/OfflineSync.js', 'map/MapEngine.js', 'map/GpsTracker.js', 'map/TurfLasso.js', 'map/MapTools.js', 'ui/BottomCard.js', 'ui/FilterDrawer.js', 'ui/LassoSheet.js', 'ui/ListView.js', 'ui/StatsView.js', 'ui/LeadImport.js', 'ui/AdminPanel.js', 'ui/AdminRoster.js', 'map/PinStudio.js', 'map/TurfZones.js', 'ui/CardPlus.js', 'ui/FollowUps.js', 'core/Pwa.js',
   'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js', 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css'];
 const TILE_HOSTS = ['server.arcgisonline.com', 'basemap.nationalmap.gov', 'tiles.openfreemap.org'];
 
-self.addEventListener('install', e => { e.waitUntil(caches.open(SHELL).then(c => c.addAll(ASSETS).then(() => c.add('config.env.js').catch(() => {}))).then(() => self.skipWaiting())); });   // endpoints survive SW updates
+self.addEventListener('install', e => { e.waitUntil(caches.open(SHELL).then(c => c.addAll(ASSETS.map(u => new Request(u, { cache: 'reload' }))).then(() => c.add('config.env.js').catch(() => {}))).then(() => self.skipWaiting())); });   // fresh files (no HTTP cache); endpoints survive SW updates
+self.addEventListener('message', e => { if (e.data === 'skipWaiting') self.skipWaiting(); });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== SHELL && k !== TILES).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
@@ -29,6 +30,7 @@ self.addEventListener('fetch', e => {
     }).catch(() => caches.match(req)));
     return;
   }
+  if (url.origin === location.origin && url.pathname.endsWith('/version.json')) { e.respondWith(fetch(req, { cache: 'no-store' })); return; }   // release check: never cached
   if (url.origin === location.origin && url.pathname.endsWith('/config.env.js')) {      // endpoints: network-first so a changed Sync URL applies at once
     e.respondWith(fetch(req).then(res => { if (res.ok) caches.open(SHELL).then(c => c.put(req, res.clone())); return res; }).catch(() => caches.match(req)));
     return;

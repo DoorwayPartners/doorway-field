@@ -66,7 +66,7 @@
     await DF.roster.save(DF.roster.all().map(x => x.id === r.id ? Object.assign({}, x, { invite: { h, exp } }) : x));
     DF.sync.append({ type: 'invite', rep: r.id, name: r.name, role: r.role, team: r.team || '', campaigns: r.campaigns || [], color: r.color, pin: r.pin || '', h, exp });
     const url = inviteUrl(token); $('#invite-out').value = url; $('#invite-row').hidden = false;
-    try { await navigator.clipboard.writeText(url); DF.toast('Invite link copied (valid 7 days)'); }
+    try { await navigator.clipboard.writeText(url); DF.toast('Invite Link Copied!'); }
     catch (e) { $('#invite-out').select(); DF.toast('Invite link ready: copy it from the box'); }
     DF.sync.flush();
     return url;

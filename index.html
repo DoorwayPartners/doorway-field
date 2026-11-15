@@ -17,22 +17,25 @@
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js" defer></script>
   <script src="config.env.js" defer></script><!-- persistent runtime endpoints (published repo only; a 404 here is normal in staging) -->
   <script src="config.public.js" defer></script>
-  <script src="app.js" defer></script>
-  <script src="OfflineSync.js" defer></script>
-  <script src="MapEngine.js" defer></script>
-  <script src="MapTools.js" defer></script>
-  <script src="BottomCard.js" defer></script>
-  <script src="FilterDrawer.js" defer></script>
-  <script src="LassoSheet.js" defer></script>
-  <script src="ListView.js" defer></script>
-  <script src="StatsView.js" defer></script>
-  <script src="LeadImport.js" defer></script>
-  <script src="AdminPanel.js" defer></script>
-  <script src="PinStudio.js" defer></script>
-  <script src="TurfZones.js" defer></script>
-  <script src="CardPlus.js" defer></script>
-  <script src="FollowUps.js" defer></script>
-  <script src="Pwa.js" defer></script>
+  <script src="core/app.js" defer></script>
+  <script src="core/OfflineSync.js" defer></script>
+  <script src="map/MapEngine.js" defer></script>
+  <script src="map/GpsTracker.js" defer></script>
+  <script src="map/TurfLasso.js" defer></script>
+  <script src="map/MapTools.js" defer></script>
+  <script src="ui/BottomCard.js" defer></script>
+  <script src="ui/FilterDrawer.js" defer></script>
+  <script src="ui/LassoSheet.js" defer></script>
+  <script src="ui/ListView.js" defer></script>
+  <script src="ui/StatsView.js" defer></script>
+  <script src="ui/LeadImport.js" defer></script>
+  <script src="ui/AdminPanel.js" defer></script>
+  <script src="ui/AdminRoster.js" defer></script>
+  <script src="map/PinStudio.js" defer></script>
+  <script src="map/TurfZones.js" defer></script>
+  <script src="ui/CardPlus.js" defer></script>
+  <script src="ui/FollowUps.js" defer></script>
+  <script src="core/Pwa.js" defer></script>
 </head>
 <body>
 <main id="app">
@@ -44,6 +47,7 @@
       <span id="sync-state" class="sync">local</span><span id="sync-queue" class="queue"></span><button type="button" id="me-name" class="me"></button>
     </header>
     <div id="ring-legend" class="ring-legend" hidden></div>
+    <div id="turf-badge" class="turf-badge" hidden>👆 Draw turf with your finger</div>
     <div id="basemap-menu" class="basemap-menu" role="menu"><button type="button" data-b="google">Google Hybrid</button><button type="button" data-b="esri">Esri Satellite</button><button type="button" data-b="osm">Street (OSM)</button></div>
     <div id="install-banner" class="install-banner" hidden><span id="install-text">Install the Doorway Field app</span><button type="button" class="btn primary" id="install-go">Install</button><button type="button" class="x" id="install-x" aria-label="Dismiss install banner">×</button></div>
     <div class="pills left">
@@ -60,7 +64,6 @@
       <button type="button" class="pill gps" id="pill-gps" aria-label="Recenter and follow me">◎</button>
     </div>
     <div id="search-bar" class="floatbar"><input id="search-input" type="search" placeholder="Search your leads" autocomplete="off"><button type="button" class="btn" id="search-geo" hidden>Search Town/Street ⌖</button><ul id="search-results"></ul></div>
-    <div id="lasso-bar" class="floatbar actionbar"><span id="lasso-count">Drag a circle around doors</span><button type="button" class="btn" id="lasso-cancel">Cancel</button><button type="button" class="btn primary" id="lasso-done">Done</button></div>
     <div id="sel-bar" class="floatbar actionbar"><span id="sel-count">0 selected</span><button type="button" class="btn" id="sel-clear">Clear</button><button type="button" class="btn primary" id="sel-status">Actions</button></div>
     <button type="button" id="route-clear" class="route-clear" hidden>Route ✕</button>
     <div id="add-cross" class="center-cross" hidden></div>
@@ -107,6 +110,10 @@
 
   <section id="view-admin" class="view" aria-label="Admin">
     <header class="viewhead"><h1>Admin</h1><p class="muted">Saved on this device until the Doorway Field API ships; the server re-checks every admin action</p></header>
+    <div class="manager-only team-card"><h3>Team &amp; Logins</h3>
+      <div class="pv-scroll"><table class="grid"><thead><tr><th>Name</th><th>Role</th><th>Default Campaign</th><th>Status</th><th></th></tr></thead><tbody id="team-body"></tbody></table></div>
+      <form id="team-form" class="filters team-form"><input id="tm-name" placeholder="Full name" maxlength="40" aria-label="Full name"><select id="tm-role" aria-label="Role"><option>Agent</option><option>Manager</option></select><select id="tm-camp" aria-label="Default campaign"></select><input id="tm-pin" inputmode="numeric" maxlength="4" placeholder="4-digit PIN" aria-label="4-digit PIN" autocomplete="off"><button class="btn primary" type="submit">+ Add / Update Rep</button></form>
+    </div>
     <h3>Import leads (CSV)</h3>
     <div class="filters"><label class="inline">Campaign <select id="imp-campaign"></select></label><a href="#" id="sample-csv" class="link">Download Sample CSV</a></div>
     <div id="drop-zone" class="drop-zone" role="button" tabindex="0">Drop a CSV here or tap to choose<small>SalesRabbit 19-column, Doorway schema, Tool #1 export, or address + lat + lng. Nothing is added until you Submit.</small></div>
@@ -190,7 +197,15 @@
   <div id="details-body" class="details-body"></div>
 </div></div>
 
+<div id="turf-sheet" class="modal drawer" role="dialog" aria-label="Assign Turf"><div class="sheet compact">
+  <div class="sheet-head"><h2>Assign Turf</h2><button type="button" class="x" id="ts-close" aria-label="Close">×</button></div>
+  <p class="ts-count"><b id="ts-count">0 doors</b> inside the lasso</p>
+  <div class="pv-actions"><label class="manager-only">Assign to rep <select id="ts-rep"></select></label><label>Campaign <select id="ts-camp"></select></label><input id="ts-name" class="manager-only" placeholder="Turf name (optional)" maxlength="40" aria-label="Turf name"></div>
+  <div class="pv-actions"><button type="button" class="btn primary manager-only" id="ts-save">Save Turf</button><button type="button" class="btn" id="ts-clear">Clear</button><button type="button" class="btn" id="ts-more">More…</button></div>
+</div></div>
+<div id="update-banner" class="update-banner" role="button" tabindex="0" hidden><span id="update-text">Update Ready — Tap to Refresh</span></div>
 <div id="modal-signin" class="modal" role="dialog" aria-label="Sign in"><form id="signin-form" class="sheet"><div class="sheet-head"><h2 id="signin-title">Who's knocking?</h2></div>
+  <p id="signin-banner" class="signin-banner" hidden>Sign in to sync your turf &amp; knocks</p>
   <label><span>Your name</span><select id="signin-name"></select></label>
   <label id="signin-id-row" hidden><span>Rep ID</span><input id="signin-id" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="40"></label>
   <label id="signin-pin-row" hidden><span id="signin-pin-label">PIN</span><input id="signin-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>

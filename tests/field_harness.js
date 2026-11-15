@@ -76,7 +76,7 @@ function serve() {
 async function newPage(browser, base, opts) {
   const { devices } = require('playwright');
   opts = opts || {};
-  const context = await browser.newContext(Object.assign({}, devices[opts.device || 'iPhone 13'], { serviceWorkers: 'block', permissions: ['geolocation'],
+  const context = await browser.newContext(Object.assign({}, devices[opts.device || 'iPhone 13'], { serviceWorkers: 'block', permissions: opts.noGeo ? [] : ['geolocation'],
     geolocation: opts.geo || { latitude: 43.4394, longitude: -70.7743 }, acceptDownloads: true }));
   await stub(context);
   if (opts.block) await context.route(opts.block, r => r.abort());
@@ -87,7 +87,8 @@ async function newPage(browser, base, opts) {
     window.DF_CONFIG_OVERRIDE = Object.assign(o.noApi ? {} : { API_URL: 'https://api.test/exec' }, { FIXTURE_URL: '/tests/Brookline_Sanford_50.json', SW: false, FLUSH_EVERY_MS: 3000, ROSTER: o.roster }, o.override || {});
     if (!o.install && !localStorage.getItem('df.installDismissed')) localStorage.setItem('df.installDismissed', String(Date.now()));   // banner tested on purpose only
     if (o.user && !localStorage.getItem('df.user')) localStorage.setItem('df.user', JSON.stringify({ id: o.user }));
-  }, { user: opts.user || '', override: opts.override || null, roster: TEST_ROSTER, install: !!opts.install, noApi: !!opts.noApi });
+    if (o.user && !o.noSession && !localStorage.getItem('df.session')) localStorage.setItem('df.session', JSON.stringify({ token: 'S-test', exp: Date.now() + 864e5 }));   // a preset user = a valid cached session
+  }, { user: opts.user || '', override: opts.override || null, roster: TEST_ROSTER, install: !!opts.install, noApi: !!opts.noApi, noSession: !!opts.noSession });
   const page = await context.newPage(), errors = [];
   page.on('pageerror', e => errors.push(String(e)));
   await page.goto(base + (opts.path || ''));

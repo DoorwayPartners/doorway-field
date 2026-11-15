@@ -106,21 +106,21 @@ const guardrails = () => require('./scan_secrets_csp.js').scan(ok);
       ok((b === 'google' ? /lyrs=y&/.test(s.tiles) && s.label === 'Hybrid ▾' : b === 'esri' ? /World_Imagery/.test(s.tiles) && s.ref && s.label === 'Esri ▾' : !s.tiles && s.label === 'Street ▾') && !s.menu && s.leads && s.ring,
         'Hybrid ▾ menu › ' + { google: 'Google Hybrid', esri: 'Esri Satellite', osm: 'Street (OSM)' }[b] + ' in one tap (pins + rings re-added)', s);
     }
-    const rot = await page.evaluate(async () => { const m = DF.map.instance, me0 = m.getSource('me')._data.features.length; m.jumpTo({ bearing: 40, pitch: 30 }); const tilted = Math.round(m.getPitch()); DF.$('#pill-compass').click(); await new Promise(r => setTimeout(r, 450));
-      return { drag: m.dragRotate.isEnabled(), touchRot: m.touchZoomRotate.isEnabled() && m.touchZoomRotate._rotationDisabled !== true, touchPitch: m.touchPitch.isEnabled(), maxPitch: m.getMaxPitch(), tilted, bearing: Math.round(m.getBearing()), pitch: Math.round(m.getPitch()), me0 }; });
+    const rot = await page.evaluate(async () => { const m = DF.map.instance, me0 = m.getSource('me')._data.features.length, hadFix = !!DF.gps.last(); m.jumpTo({ bearing: 40, pitch: 30 }); const tilted = Math.round(m.getPitch()); DF.$('#pill-compass').click(); await new Promise(r => setTimeout(r, 450));
+      return { drag: m.dragRotate.isEnabled(), touchRot: m.touchZoomRotate.isEnabled() && m.touchZoomRotate._rotationDisabled !== true, touchPitch: m.touchPitch.isEnabled(), maxPitch: m.getMaxPitch(), tilted, bearing: Math.round(m.getBearing()), pitch: Math.round(m.getPitch()), me0, hadFix }; });
     ok(rot.drag && rot.touchRot && rot.touchPitch && rot.maxPitch === 60 && rot.tilted === 30 && rot.bearing === 0 && rot.pitch === 0, 'two-finger rotate + tilt enabled; N compass snaps back to bearing 0, pitch 0', rot);
-    await page.evaluate(() => DF.map.jumpTo(DF.sync.all()[5].lead_id)); await page.click('#pill-gps'); await page.waitForFunction(() => DF.tools.following, null, { timeout: 8000 }); await page.waitForTimeout(700);
+    await page.evaluate(() => DF.map.jumpTo(DF.sync.all()[5].lead_id)); await page.click('#pill-gps'); await page.waitForFunction(() => DF.gps.following, null, { timeout: 8000 }); await page.waitForTimeout(700);
     const dot = await page.evaluate(() => { const m = DF.map.instance, f = m.getSource('me')._data.features, c = m.getCenter(); const pt = (f.find(x => x.geometry.type === 'Point') || { geometry: { coordinates: [0, 0] } }).geometry.coordinates;
       return { types: f.map(x => x.geometry.type).join(), dLat: Math.abs(c.lat - pt[1]), dLng: Math.abs(c.lng - pt[0]), acc: !!m.getLayer('me-acc'), fix: pt }; });
-    ok(rot.me0 === 0 && dot.types === 'Polygon,Point' && dot.acc && dot.dLat < 0.0005 && dot.dLng < 0.0005 && dot.fix[1] !== 0, 'blue dot hidden until a real fix; Locate Me = fresh fix → fly to the rep + accuracy ring + Follow Me', { rot, dot });
-    const jit = await page.evaluate(() => { const a = { latitude: 43.4394, longitude: -70.7743, accuracy: 8 }; DF.tools.onFix(a); return [DF.tools.onFix({ latitude: 43.43942, longitude: -70.7743, accuracy: 8 }), DF.tools.onFix({ latitude: 43.4395, longitude: -70.7743, accuracy: 8 })]; });
+    ok(rot.me0 === (rot.hadFix ? 2 : 0) && dot.types === 'Polygon,Point' && dot.acc && dot.dLat < 0.0005 && dot.dLng < 0.0005 && dot.fix[1] !== 0, 'blue dot hidden until a real fix; Locate Me = fresh fix → fly to the rep + accuracy ring + Follow Me', { rot, dot });
+    const jit = await page.evaluate(() => { const a = { latitude: 43.4394, longitude: -70.7743, accuracy: 8 }; DF.gps.onFix(a); return [DF.gps.onFix({ latitude: 43.43942, longitude: -70.7743, accuracy: 8 }), DF.gps.onFix({ latitude: 43.4395, longitude: -70.7743, accuracy: 8 })]; });
     ok(jit[0] === false && jit[1] === true, 'GPS jitter filter: a 2 m wobble is ignored, a 11 m move is drawn', jit);
     const hide = v => page.evaluate(x => { Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => x }); document.dispatchEvent(new Event('visibilitychange')); }, v);
     const tick = api.posts; for (let i = 0; i < 100 && api.posts === tick; i++) await page.waitForTimeout(50);   // align just after an interval flush (tests: every 3 s)
     const posts0 = api.posts; await page.evaluate(() => DF.sync.append({ type: 'note', lead_id: DF.sync.all()[0].lead_id, campaign: 'Fidium', text: 'battery test' }));
     const batched = await page.evaluate(() => new Promise(r => setTimeout(() => r(DF.sync.queueSize()), 1200)));
-    await hide('hidden'); const paused = !(await page.evaluate(() => DF.tools.following)); await page.waitForFunction(() => DF.sync.queueSize() === 0, null, { timeout: 8000 });
-    await hide('visible'); const resumed = await page.evaluate(() => DF.tools.following); await page.evaluate(() => { delete document.visibilityState; DF.tools.follow(false); });
+    await hide('hidden'); const paused = !(await page.evaluate(() => DF.gps.watching)); await page.waitForFunction(() => DF.sync.queueSize() === 0, null, { timeout: 8000 });
+    await hide('visible'); const resumed = await page.evaluate(() => DF.gps.watching); await page.evaluate(() => { delete document.visibilityState; DF.gps.follow(false); });
     ok(batched >= 1 && paused && resumed && api.posts > posts0, 'battery: taps queue (no per-tap upload), screen-off flushes + pauses GPS, screen-on resumes GPS', { batched, paused, resumed });
     // ---- Admin: CSV importer ----
     ok(await page.isVisible('#tab-admin'), 'Admin tab visible to the Owner');

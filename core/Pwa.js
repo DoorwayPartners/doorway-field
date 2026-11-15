@@ -1,10 +1,10 @@
-// Doorway Field v2.3 — Pwa: dismissible "Install Doorway Field App" banner (Android / Chrome beforeinstallprompt, iOS Safari Share → Add to Home Screen
-// guide), hidden in installed standalone mode; service-worker update watcher → "Field Update Ready — Tap to Refresh" toast.
+// Doorway Field v2.5 — Pwa: dismissible "Install Doorway Field App" banner (Android / Chrome beforeinstallprompt, iOS Safari Share → Add to Home Screen
+// guide), hidden in installed standalone mode; version.json release check → "Update vX Ready — Tap to Refresh" top banner (no data wipe).
 (function () {
   'use strict';
   const DF = window.DF;
   const $ = s => DF.$(s);
-  let deferred = null, reloading = false;
+  let deferred = null, reloading = false, reg = null;
   const ua = () => navigator.userAgent || '';
   const standalone = () => (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
   const ios = () => /iPhone|iPad|iPod/.test(ua()) && /Safari/.test(ua()) && !/CriOS|FxiOS|EdgiOS/.test(ua());
@@ -33,12 +33,31 @@
   }
   function check() { if (deferred) return show('prompt'); if (ios()) return show('ios'); hide(false); return false; }
 
-  function updateReady() { DF.toast('Field Update Ready — Tap to Refresh', 'Refresh', () => { reloading = true; location.reload(); }, 600000); }
+  // ---- zero-clear-data updater: version.json (never cached) vs the running VERSION → top banner; tap = drop stale static caches + reload.
+  // IndexedDB (leads, outbox), localStorage (session, saved Sync URL) and the map-tile cache are untouched.
+  function updateReady(v) { $('#update-text').textContent = 'Update v' + (v || 'new') + ' Ready — Tap to Refresh'; $('#update-banner').hidden = false; }
+  async function checkVersion() {
+    try {
+      const j = await (await fetch('version.json?ts=' + Date.now(), { cache: 'no-store' })).json();
+      if (j && j.version && j.version !== DF.cfg.VERSION) { if (reg) reg.update().catch(() => {}); updateReady(j.version); return j.version; }
+    } catch (e) { /* offline: try again on the next foreground */ }
+    return null;
+  }
+  async function applyUpdate() {
+    reloading = true;
+    try {
+      if (reg && reg.waiting) reg.waiting.postMessage('skipWaiting');
+      const keys = window.caches ? await caches.keys() : [];
+      await Promise.all(keys.filter(k => /^df-shell/.test(k)).map(k => caches.delete(k)));
+    } catch (e) { /* reload anyway */ }
+    location.reload();
+  }
   // sw.js installs with skipWaiting + clients.claim, so a new deploy takes control on its own: offer the refresh when that happens.
-  function watch(reg) {
+  function watch(r) {
+    reg = r;
     if (!reg || !navigator.serviceWorker) return;
     const had = !!navigator.serviceWorker.controller;                    // first install is not an "update"
-    navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !reloading) updateReady(); });
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !reloading) checkVersion().then(v => { if (!v) updateReady(''); }); });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
     setInterval(() => reg.update().catch(() => {}), 30 * 60000);
   }
@@ -47,8 +66,10 @@
     $('#install-go').addEventListener('click', install);
     $('#install-x').addEventListener('click', () => hide(true));
     if (window.matchMedia) { const mq = window.matchMedia('(display-mode: standalone)'); if (mq.addEventListener) mq.addEventListener('change', check); }
-    check();
+    $('#update-banner').addEventListener('click', applyUpdate);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') checkVersion(); });
+    check(); checkVersion();
   }
 
-  DF.pwa = { init, check, install, updateReady, watch, standalone, hide };
+  DF.pwa = { init, check, install, updateReady, checkVersion, applyUpdate, watch, standalone, hide };
 })();
