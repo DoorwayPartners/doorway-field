@@ -52,6 +52,18 @@
     } catch (e) { /* reload anyway */ }
     location.reload();
   }
+  // v2.5.2 1-tap "Refresh App / Clear Cache" (sign-in sheet + Filters drawer): unregister stale service workers, drop only df-shell* static caches,
+  // cache-busted reload (?v=). IndexedDB leads + outbox, localStorage (session, API_URL) and map tiles are kept: no more wiping Android app data.
+  async function resetCache() {
+    reloading = true;
+    try {
+      const regs = navigator.serviceWorker && navigator.serviceWorker.getRegistrations ? await navigator.serviceWorker.getRegistrations() : [];
+      await Promise.all(regs.map(r => r.unregister()));
+      const keys = window.caches ? await caches.keys() : [];
+      await Promise.all(keys.filter(k => /^df-shell/.test(k)).map(k => caches.delete(k)));
+    } catch (e) { /* reload anyway */ }
+    location.replace(location.pathname + '?v=' + Date.now() + location.hash);
+  }
   // sw.js installs with skipWaiting + clients.claim, so a new deploy takes control on its own: offer the refresh when that happens.
   function watch(r) {
     reg = r;
@@ -71,5 +83,8 @@
     check(); checkVersion();
   }
 
-  DF.pwa = { init, check, install, updateReady, checkVersion, applyUpdate, watch, standalone, hide };
+  DF.pwa = { init, check, install, updateReady, checkVersion, applyUpdate, resetCache, watch, standalone, hide };
+  // bound at load (before sign-in): the button must work even when the sign-in sheet is the only thing on screen
+  DF.$$('.btn-reset').forEach(b => b.addEventListener('click', resetCache));
+  if (/[?&]v=\d+/.test(location.search)) history.replaceState(null, '', location.pathname + location.search.replace(/[?&]v=\d+/, '').replace(/^&/, '?') + location.hash);
 })();

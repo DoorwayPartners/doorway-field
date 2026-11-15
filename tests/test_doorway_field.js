@@ -174,7 +174,7 @@ const guardrails = () => require('./scan_secrets_csp.js').scan(ok);
     await r.page.waitForFunction(() => /Wrong Rep ID or PIN/.test(DF.$('#signin-err').textContent));
     await r.page.fill('#signin-pin', '1357'); await r.page.click('#signin-form button');
     await ready(r.page);
-    ok(fresh.opts === 'cristian-coy,__id' && !fresh.idRow && await r.page.evaluate(() => DF.auth.id === 'agent-1' && !!(DF.store.get('session') || {}).token && !!DF.roster.get('agent-1').pin),
+    ok(fresh.opts === 'cristian-coy,__id' && fresh.idRow && await r.page.evaluate(() => DF.auth.id === 'agent-1' && !!(DF.store.get('session') || {}).token && !!DF.roster.get('agent-1').pin),
       'fresh phone: placeholder seats never offered (real roster names only); Rep ID + PIN checked by the Sync API (wrong PIN refused) → session', fresh);
     ok(!(await r.page.isVisible('#tab-admin')) && await r.page.evaluate(() => DF.auth.role === 'Agent'), 'server sign-in as Agent; Admin hidden');
     ok(await r.page.evaluate(async () => { DF.showTab('admin'); return DF.currentTab === 'map' && (await DF.imports.preview('address,lat,lng\n1 X,43,-70', 'x.csv')) === null; }), 'Agent cannot open Admin or import (UI gate; API re-checks)');

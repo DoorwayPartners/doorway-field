@@ -23,7 +23,7 @@
   }
   // Basemap chain (v2.4.4): DF.map.base = 'esri' (default) | 'google' | 'osm' (OpenFreeMap street vectors, OSM data). On tile failure → next.
   const NEXT = { google: 'esri', esri: 'osm', osm: 'esri' }, NAMES = { google: 'Google', esri: 'Esri imagery', osm: 'OpenStreetMap street map' };
-  const APP_SRC = { leads: 1, lasso: 1, route: 1, me: 1, turfs: 1, 'turf-draw': 1 };
+  const APP_SRC = { leads: 1, lasso: 1, route: 1, me: 1, 'turf-draw': 1 };
   const base = () => DF.map.base || (DF.map.base = [DF.store.get('basemap', ''), DF.cfg.BASEMAP].find(k => ['google', 'esri', 'osm'].includes(k)) || 'esri');   // rep's pick wins
   function buildStyle(m) {
     const t = DF.cfg.TILES, b = base();

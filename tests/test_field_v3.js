@@ -17,7 +17,7 @@ const { ok, newPage, ready, tap, OWNER, api } = H;
     await page.evaluate(id => { DF.map.jumpTo(id); DF.bus.emit('pin:selected', id); }, pair[0]); await page.waitForTimeout(300);
     const c1 = await page.evaluate(() => { const r = DF.sync.get(DF.card.current()), ph = r.phone.replace(/[^\d+]/g, '');
       return { nav: DF.$('#card-nav').getAttribute('href') === 'https://maps.google.com/?daddr=' + r.lat + ',' + r.lng, call: !DF.$('#card-call').hidden && DF.$('#card-call').getAttribute('href') === 'tel:' + ph,
-        text: DF.$('#card-text').getAttribute('href') === 'sms:' + ph, prevOff: DF.$('#card-prev').disabled, score: !!DF.$('#card-score') }; });
+        text: DF.$('#card-text').getAttribute('href').startsWith('sms:' + ph + '?body='), prevOff: DF.$('#card-prev').disabled, score: !!DF.$('#card-score') }; });
     ok(c1.nav && c1.call && c1.text && c1.prevOff && c1.score, 'pin drawer: header navigation icon + 1-tap Call (tel:) / Text (sms:) when a phone is saved + scoreboard strip', c1);
     await page.click('#card-address'); await page.waitForTimeout(100);
     const cp = await page.evaluate(() => ({ copied: window.__copied.pop() || '', flash: DF.$('#card-address').classList.contains('copied'), addr: DF.$('#card-address').textContent }));
@@ -146,6 +146,57 @@ const { ok, newPage, ready, tap, OWNER, api } = H;
       const t = inC.find(mine); DF.sync.mutate(t.lead_id, { assigned_rep_email: 'agent-2' }, 'assign'); DF.map.refresh(); DF.list.render && DF.list.render();
       const v1 = DF.sync.all().filter(DF.map.visible); return { all, n0: v0.length, n1: v1.length, gone: !v1.includes(t), rows: DF.$$('#list-body tr').length }; }); await ag.context.close();
     ok(ags.all && ags.n0 > 0 && ags.n1 === ags.n0 - 1 && ags.gone, 'Agent view isolation: map + list show only leads assigned to that Agent (reassigned lead disappears)', ags);
+
+    console.log('Login form, rolling session, cache reset (v2.5.2)');
+    const lf = await newPage(L.browser, L.base, { user: H.AGENT_A, noSession: true }); await lf.page.waitForSelector('#modal-signin.open', { timeout: 15000 });
+    const lf0 = await lf.page.evaluate(() => { const u = DF.$('#signin-id'), p = DF.$('#signin-pin'), f = DF.$('#signin-form');
+      return { form: f.tagName === 'FORM' && f.method === 'post', u: u.name + '/' + u.autocomplete + '/' + !DF.$('#signin-id-row').hidden + '/' + u.value, p: p.name + '/' + p.type + '/' + p.autocomplete,
+        reset: !!f.querySelector('#signin-reset.btn-reset') && /Refresh App \/ Clear Cache/.test(DF.$('#signin-reset').textContent) }; });
+    await lf.page.fill('#signin-pin', '1357'); await lf.page.click('#signin-form button[type=submit]'); await ready(lf.page);
+    const lf1 = await lf.page.evaluate(async () => { const ls = DF.store.get('session'), idb = DF.sync.meta('session'); return { same: !!ls && !!idb && ls.token === idb.token, d: Math.round((ls.exp - Date.now()) / 864e5) }; });
+    await lf.page.evaluate(() => localStorage.removeItem('df.session')); await lf.page.reload(); await ready(lf.page);   // localStorage lost, IndexedDB kept
+    const lf2 = await lf.page.evaluate(() => ({ modal: DF.$('#modal-signin').classList.contains('open'), id: DF.auth.id, sess: !!DF.session() }));
+    ok(lf0.form && lf0.u === 'username/username/true/agent-1' && lf0.p === 'password/password/current-password' && lf0.reset && lf1.same && lf1.d >= 29 && !lf2.modal && lf2.id === 'agent-1' && lf2.sess,
+      'sign-in = semantic username + current-password form (autofill), Refresh App on the sheet; 30-day session kept in localStorage AND IndexedDB (survives a wiped localStorage)', { lf0, lf1, lf2 });
+    const gid = await lf.page.evaluate(() => DF.sync.all().find(r => DF.map.visible(r)).lead_id); api.gone.push(gid);
+    await lf.page.evaluate(async () => { const s = DF.store.get('session'); DF.store.set('session', { token: s.token, exp: Date.now() + 864e5 }); await DF.sync.flush(); });
+    await lf.page.waitForFunction(id => !DF.sync.get(id), gid, { timeout: 5000 }).catch(() => {});
+    const lf3 = await lf.page.evaluate(id => ({ gone: !DF.sync.get(id), noDelete: !DF.sync.outbox().some(e => e.type === 'delete'), d: Math.round((DF.store.get('session').exp - Date.now()) / 864e5), idb: Math.round((DF.sync.meta('session').exp - Date.now()) / 864e5) }), gid);
+    ok(lf3.gone && lf3.noDelete && lf3.d >= 29 && lf3.idb >= 29, 'sync renews the session to 30 days (both stores); a lead the server reassigned away (gone) is dropped locally, no delete event', lf3);
+    const cr0 = await lf.page.evaluate(async () => { await (await caches.open('df-shell-stale')).put('/x.js', new Response('x')); await (await caches.open('df-tiles-keep')).put('/t.png', new Response('t'));
+      DF.$('#pill-filter').click(); return { n: DF.sync.count(), btn: !!DF.$('#filter-drawer #drawer-reset.btn-reset') }; });
+    await Promise.all([lf.page.waitForNavigation(), lf.page.click('#drawer-reset')]); await ready(lf.page);
+    const cr1 = await lf.page.evaluate(async () => ({ keys: (await caches.keys()).join(), n: DF.sync.count(), sess: !!DF.session(), id: DF.auth.id, url: location.search, outbox: DF.sync.queueSize() >= 0 })); await lf.context.close();
+    ok(cr0.btn && !/df-shell-stale/.test(cr1.keys) && /df-tiles-keep/.test(cr1.keys) && cr1.n === cr0.n && cr1.sess && cr1.id === 'agent-1' && cr1.url === '',
+      'Filters drawer › Refresh App / Clear Cache: stale shell caches gone, tiles + leads + session kept, cache-busted reload (?v= stripped)', { cr0, cr1 });
+
+    console.log('Blitz Board, nudges, Text Customer (v2.6)');
+    api.board = [{ rep: 'agent-1', knocks: 30, contacts: 9, sold: 2, streak: 12, best: 15 }];
+    const bz = await newPage(L.browser, L.base, { user: OWNER }); await ready(bz.page);
+    await bz.page.evaluate(() => { window.__copied = []; Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async t => { window.__copied.push(t); } } }); });
+    const ids = await bz.page.evaluate(() => DF.sync.all().filter(r => DF.map.visible(r) && r.status_code === 'NEW').slice(0, 4).map(r => r.lead_id));
+    await tap(bz.page, ids[0], 'NH1'); await tap(bz.page, ids[1], 'GB'); await tap(bz.page, ids[2], 'NI'); await tap(bz.page, ids[3], 'P_GB');
+    await bz.page.click('#sc-blitz'); await bz.page.waitForFunction(() => DF.$('#blitz-sheet').classList.contains('open') && DF.$$('#blitz-body tr').length === 2, null, { timeout: 8000 });
+    await bz.page.click('#blitz-copy'); await bz.page.waitForFunction(() => window.__copied.length > 0);
+    const b1 = await bz.page.evaluate(() => ({ rows: DF.$$('#blitz-body tr').map(t => Array.from(t.cells).map(c => c.textContent.trim()).join('|')), pill: DF.$('#sc-blitz').textContent, txt: window.__copied.slice(-1)[0], at: DF.$('#blitz-at').textContent, toast: DF.$('#toast-msg').textContent }));
+    const t = b1.txt.split('\n');
+    ok(b1.rows[0] === '1|Agent 1 🔥12|30|9|2' && b1.rows[1] === '2|Cristian Coy 🔥4|4|3|0' && b1.pill === '🔥 4' && /^Team as of/.test(b1.at) && /^⚡ Blitz Update · /.test(t[0]) &&
+      t[1] === '1. Agent 1 — 30 knocks · 9 contacts · 2 sold 🔥12' && t[2] === '2. Cristian Coy — 4 knocks · 3 contacts · 0 sold 🔥4' && t[3] === 'Team: 34 knocks · 12 contacts · 2 sold' && /GroupMe/.test(b1.toast),
+      'Blitz Board: team ranking from server aggregates + this phone\'s live counts, 🔥 knock streak on the card, 1-tap Copy Blitz Update for GroupMe', b1);
+    await bz.page.evaluate(() => DF.closeModal('blitz-sheet'));
+    const sm = await bz.page.evaluate(() => { const r = DF.sync.all().find(x => x.phone && DF.map.visible(x)); DF.bus.emit('pin:selected', r.lead_id); const h = DF.$('#card-text').getAttribute('href');
+      return { h, body: decodeURIComponent(h.split('?body=')[1] || ''), num: h.startsWith('sms:' + r.phone.replace(/[^\d+]/g, '') + '?body='), label: DF.$('#card-text').getAttribute('aria-label'), camp: r.campaign }; });
+    ok(sm.num && sm.label === 'Text Customer' && /^Hey \S+, swinging back through [A-Z][a-z]+.* today regarding \S.* fiber availability — let me know if you have 2 mins!$/.test(sm.body) && !/fiber fiber/i.test(sm.body),
+      '1-tap Text Customer: sms: deep link pre-filled with the canvassing template (name, street, campaign)', sm);
+    const nd = await bz.page.evaluate(id => { DF.card.close(); const d = new Date(); d.setHours(18, 0, 0, 0); const t18 = d.getTime(), t10 = d.setHours(10, 0, 0, 0);
+      const ap = DF.sync.all().find(r => DF.map.visible(r) && r.status_code === 'NEW'); DF.sync.mutate(ap.lead_id, { status_code: 'APPT', appt_at: new Date(t18 + 30 * 6e4).toISOString() }, 'appt');
+      const pg = DF.sync.get(id), b = (r, t) => DF.followups.badges(r, t).map(x => x[1]).join('+');
+      DF.showTab('list'); DF.followups.toggle(true); DF.followups.render(t18);
+      return { pg18: b(pg, t18), pg10: b(pg, t10), ap: b(DF.sync.get(ap.lead_id), t18), dom: DF.$$('#followups .nudge.n-due').length > 0, prime: DF.$$('#followups .nudge.n-prime').length,
+        firstDue: !!DF.$('#followups .fu-list li .n-due'), sms: !!DF.$('#followups .fu-text') ? /\?body=Hey/.test(DF.$('#followups .fu-text').getAttribute('href')) : 'no-phone' }; }, ids[3]);
+    await bz.context.close(); api.board = null;
+    ok(nd.pg18 === 'Due Now+2nd Attempt' && nd.pg10 === 'Prime Window: 5–7 PM+2nd Attempt' && nd.ap === 'Due Now' && nd.dom && nd.firstDue && nd.sms !== false,
+      'Follow-Ups nudges: Due Now (APPT within the hour, go-backs 5–7 PM), Prime Window: 5–7 PM, 2nd Attempt; Text Customer template on rows', nd);
 
     console.log('Stability (v2.4.5)');
     const hg = await newPage(L.browser, L.base, { user: OWNER, hang: /mt\d\.google\.com/ }); await ready(hg.page); const t0 = Date.now();

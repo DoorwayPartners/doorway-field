@@ -19,15 +19,15 @@ const report = () => { console.log('\n' + (fail ? 'FAIL' : 'PASS') + ' ' + pass 
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAAABJRU5ErkJggg==', 'base64');
 const fnv = s => { let h1 = 0x811c9dc5, h2 = 0x01000193, i, c; s = String(s); for (i = 0; i < s.length; i++) { c = s.charCodeAt(i); h1 ^= c; h1 = Math.imul(h1, 16777619) >>> 0; h2 ^= c + i; h2 = Math.imul(h2, 2246822519) >>> 0; } return ('0000000' + h1.toString(16)).slice(-8) + ('0000000' + h2.toString(16)).slice(-8); };
 // Mock of the Sync contract (the real server is server/FieldApi.gs, tested in test_field_api.js). Server roster: agent-1 PIN 1357.
-const api = { events: new Map(), leads: new Map(), posts: 0, reject: new Set(), extra: [], invites: new Map(), geoSearches: 0, n: 0,
+const api = { events: new Map(), leads: new Map(), posts: 0, reject: new Set(), extra: [], invites: new Map(), geoSearches: 0, n: 0, gone: [],
   roster: new Map([['agent-1', { id: 'agent-1', name: 'Agent 1', role: 'Agent', team: 'Team 1', campaigns: ['Fidium'], color: '#00a3a3', pin: fnv('agent-1:1357') }]]) };
 function apiHandle(body) {
   if (body.action === 'redeem_invite') {                          // Sync contract: single-use, unexpired token hash -> authorized roster profile
     const i = api.invites.get(body.token_hash); if (!i || i.used || i.exp < Date.now()) return { ok: false };
-    i.used = true; return { ok: true, rep: i.rep, session: 'S' + (++api.n), session_exp: Date.now() + 864e5 };
+    i.used = true; return { ok: true, rep: i.rep, session: 'S' + (++api.n), session_exp: Date.now() + 30 * 864e5 };
   }
   if (body.action === 'pin_login') {
-    const r = api.roster.get(body.rep_id); return r && r.pin === body.pin_hash ? { ok: true, rep: r, session: 'S' + (++api.n), session_exp: Date.now() + 864e5 } : { ok: false, error: 'bad_pin' };
+    const r = api.roster.get(body.rep_id); return r && r.pin === body.pin_hash ? { ok: true, rep: r, session: 'S' + (++api.n), session_exp: Date.now() + 30 * 864e5 } : { ok: false, error: 'bad_pin' };
   }
   api.posts++;
   const accepted = [];
@@ -41,7 +41,7 @@ function apiHandle(body) {
     const cur = api.leads.get(e.lead_id) || { lead_id: e.lead_id };
     api.leads.set(e.lead_id, Object.assign(cur, e.patch, { updated_at: new Date().toISOString() }));
   });
-  return { ok: true, accepted, leads: api.extra.splice(0), server_ts: new Date().toISOString() };
+  return { ok: true, accepted, leads: api.extra.splice(0), gone: api.gone.splice(0), board: api.board || undefined, session_exp: Date.now() + 30 * 864e5, server_ts: new Date().toISOString() };   // v1.1 contract
 }
 async function stub(context) {
   await context.route('https://unpkg.com/maplibre-gl@4.7.1/dist/*', r => r.fulfill({ path: path.join(ML, path.basename(new URL(r.request().url()).pathname)) }));

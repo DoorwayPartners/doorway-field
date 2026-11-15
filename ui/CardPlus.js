@@ -1,6 +1,6 @@
 // Doorway Field v2.4.4 — CardPlus: pin-drawer velocity tools. ← Prev | Next Door → (nearest unknocked New door, same street first), tap-to-copy
 // address, Call / Text (tel: / sms:) when a phone is saved, header navigation icon, Today's Scoreboard (Knocks | Contacts | Sold · Me | Team),
-// and the SOLD "Copy GroupMe Order" text. 0 network calls.
+// and the SOLD "Copy GroupMe Order" text. v2.6: Text Customer = sms: with an editable canvassing template (DF.cardplus.smsHref). 0 network calls.
 (function () {
   'use strict';
   const DF = window.DF;
@@ -9,6 +9,13 @@
   const streetOf = r => String(r.address || '').toUpperCase().replace(/^\s*[\d-]+[A-Z]?\s+/, '').trim();
   const dist = (a, b) => Math.hypot((a.lat - b.lat) * 111320, (a.lng - b.lng) * 111320 * Math.cos(a.lat * Math.PI / 180));
   const digits = p => String(p || '').replace(/[^\d+]/g, '');
+  const title = s => String(s || '').toLowerCase().replace(/(^|[\s-])[a-z]/g, c => c.toUpperCase());
+  function smsText(r) {                                                  // the rep edits it in their Messages app before sending
+    const first = String(r.first_name || '').trim().split(/\s+/)[0], camp = String(r.campaign || '').replace(/\s*fiber$/i, '').trim();
+    return 'Hey ' + (first ? title(first) : 'there') + ', swinging back through ' + (title(streetOf(r)) || 'your street') + ' today regarding ' + (camp || 'fiber') +
+      ' fiber availability — let me know if you have 2 mins!';
+  }
+  const smsHref = r => 'sms:' + digits(r.phone) + '?body=' + encodeURIComponent(smsText(r));
   const addrLine = r => [String(r.address || '') + (r.apt ? ' ' + r.apt : ''), r.city, [r.state, r.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 
   // ---- Next Door: nearest New door not yet stepped through, on the same street when there is one ----
@@ -45,7 +52,7 @@
     const ph = digits(r.phone);
     $('#card-nav').href = 'https://maps.google.com/?daddr=' + r.lat + ',' + r.lng;
     $('#card-call').hidden = $('#card-text').hidden = !ph;
-    if (ph) { $('#card-call').href = 'tel:' + ph; $('#card-text').href = 'sms:' + ph; }
+    if (ph) { $('#card-call').href = 'tel:' + ph; $('#card-text').href = smsHref(r); }
     $('#card-prev').disabled = !back.length;
     score();
   }
@@ -72,5 +79,5 @@
     DF.bus.on('pin:selected', () => { if (!stepping) back = []; stepping = false; });   // a manual pin tap starts a new walk
   }
 
-  DF.cardplus = { init, nextDoor, next, prev, score, copy, orderText, copyOrder, streetOf, addrLine };
+  DF.cardplus = { init, nextDoor, next, prev, score, copy, orderText, copyOrder, streetOf, addrLine, smsText, smsHref };
 })();

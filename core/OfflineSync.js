@@ -131,6 +131,12 @@
   }
   const removeMany = (ids, why) => ids.filter(id => leads.get(id) && !leads.get(id)._deleted).map(id => mutate(id, { _deleted: true }, 'delete', { why: why || '' }));
 
+  function drop(ids) {                                                     // local-only removal (no delete event), skipped while this phone has pending edits
+    const pending = new Set(Array.from(queue.values()).map(e => e.lead_id)), out = ids.filter(id => leads.has(id) && !pending.has(id));
+    out.forEach(id => leads.delete(id));
+    if (out.length) { idb('leads', 'readwrite', s => { out.forEach(id => s.delete(id)); }); DF.bus.emit('pins:changed', { all: true }); }
+    return out.length;
+  }
   // ---- merge: server row wins only if newer AND this device has no pending events for that lead ----
   function merge(serverRows) {
     const pending = new Set(Array.from(queue.values()).map(e => e.lead_id)), changed = [];
@@ -147,7 +153,7 @@
     flushing = true; DF.bus.emit('sync:state', 'syncing');
     const batch = Array.from(queue.values()).slice(0, 200);
     try {
-      const payload = JSON.stringify({ action: 'sync', org_id: DF.cfg.ORG_ID, rep: DF.auth.id, session: (DF.store.get('session', null) || {}).token || '', since: meta.since || '', events: batch });
+      const payload = JSON.stringify({ action: 'sync', org_id: DF.cfg.ORG_ID, rep: DF.auth.id, session: (DF.store.get('session', null) || {}).token || '', since: meta.since || '', day_start: new Date(new Date().setHours(0, 0, 0, 0)).toISOString(), events: batch });
       const res = await fetch(syncUrl(), { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: payload,
         keepalive: !!(opts && opts.hidden) && payload.length < 60000 });   // screen-off flush survives the app going to the background
       const j = await res.json();
@@ -157,6 +163,9 @@
       acc.forEach(id => queue.delete(id));
       if (acc.length) await idb('queue', 'readwrite', s => { acc.forEach(id => s.delete(id)); });
       merge(j.leads);
+      if (Array.isArray(j.gone) && j.gone.length) drop(j.gone);                         // v2.5.2: reassigned away from this Agent on the server
+      if (j.session_exp && DF.renewSession) DF.renewSession(j.session_exp);              // rolling 30-day session
+      if (Array.isArray(j.board)) { await setMeta('board', { day: new Date().toDateString(), at: j.server_ts || '', rows: j.board }); DF.bus.emit('board:changed'); }   // v2.6 Blitz Board aggregates
       if (Array.isArray(j.roster) && j.roster.length) {                                  // server roster has no PIN hashes: keep this phone's own
         const loc = {}; (meta.roster || []).forEach(r => { loc[r.id] = r; });
         await setMeta('roster', j.roster.map(r => Object.assign({}, r, loc[r.id] && loc[r.id].pin ? { pin: loc[r.id].pin } : {}, loc[r.id] && loc[r.id].invite ? { invite: loc[r.id].invite } : {}, loc[r.id] && loc[r.id].defaultCampaign ? { defaultCampaign: loc[r.id].defaultCampaign } : {}))); DF.bus.emit('roster:changed');
@@ -180,7 +189,7 @@
   }
 
   DF.sync = {
-    FIELDS, STATUS, BY_CODE, DEFAULTS, open, importRows, mutate, append, undo, removeMany, merge, flush, startAuto, normalize, validate, leadId, statusCode, setMeta, syncUrl,
+    FIELDS, STATUS, BY_CODE, DEFAULTS, open, importRows, mutate, append, undo, removeMany, merge, drop, flush, startAuto, normalize, validate, leadId, statusCode, setMeta, syncUrl,
     get: id => leads.get(id),
     all: () => Array.from(leads.values()).filter(r => !r._deleted),
     count: () => leads.size,

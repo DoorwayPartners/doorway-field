@@ -206,21 +206,11 @@ const lines = t => t.trimEnd().split('\r\n');
     const g = await page.evaluate(id => DF.sync.get(id), gpsId), fixLat = await page.evaluate(() => new Promise(r => navigator.geolocation.getCurrentPosition(p => r(p.coords.latitude), () => r(null), { maximumAge: 0 }))); await page.evaluate(() => DF.card.close());
     ok(addOpen && units.length === 2 && units[0][1] === units[1][1] && units[0][2] !== units[1][2] && g && g.apt === '#C' && fixLat !== null && Math.abs(g.lat - fixLat) < 1e-5,
       '+ Add Pin: map-centre crosshair logs #A + #B as separate doors at one address; My GPS drops at the fresh fix', { addOpen, units, g: g && [g.apt, g.lat], fixLat });
-    const tz = await page.evaluate(() => { const a = DF.sync.all(), la = a.map(r => r.lat), ln = a.map(r => r.lng), s = Math.min(...la) - 0.001, n = Math.max(...la) + 0.001, w = Math.min(...ln) - 0.001, e = Math.max(...ln) + 0.001;
-      DF.lasso.open(a.slice(0, 3).map(r => r.lead_id), 'Lasso', [[w, s], [e, s], [e, n], [w, n]]); return { row: !DF.$('#ls-turf').hidden, reps: DF.$$('#ls-turf-rep option').length }; });
-    await page.fill('#ls-turf-name', 'Zone Elm North'); await page.selectOption('#ls-turf-rep', 'agent-1'); await page.click('#ls-turf-save');
-    await page.waitForFunction(() => DF.turf.all().length === 1);
-    const tz2 = await page.evaluate(async () => { DF.lasso.close(); await new Promise(r => setTimeout(r, 300)); const m = DF.map.instance, z = DF.turf.all()[0], order = m.getStyle().layers.map(l => l.id);
-      return { z: [z.name, z.rep, z.color, z.poly.length].join('|'), f: m.getSource('turfs')._data.features.length, below: order.indexOf('turf-line') >= 0 && order.indexOf('turf-line') < order.indexOf('clusters'), ev: DF.sync.events().some(e => e.type === 'turf') }; });
-    await page.click('#pill-filter'); await page.uncheck('#turf-show'); const hid = await page.evaluate(() => DF.map.instance.getSource('turfs')._data.features.length);
-    await page.check('#turf-show'); await page.click('[data-close=filter-drawer]');
-    await page.evaluate(() => DF.map.setMode('satellite')); await page.waitForFunction(() => DF.map.ready && DF.map.mode === 'satellite');
-    const kept = await page.evaluate(() => DF.map.instance.getSource('turfs')._data.features.length);
-    await page.evaluate(() => DF.map.setMode('hybrid')); await page.waitForFunction(() => DF.map.ready && DF.map.mode === 'hybrid');
+    await page.evaluate(() => DF.sync.setMeta('turfs', [{ id: 'TZ-legacy', name: 'Old Zone', rep: 'agent-1', color: '#00a3a3', campaign: '', poly: [[-70.78, 43.43], [-70.77, 43.43], [-70.77, 43.44]] }]));
     await page.reload(); await ready(page); await page.waitForTimeout(300);
-    const tzAfter = await page.evaluate(() => ({ n: DF.turf.all().length, f: DF.map.instance.getSource('turfs')._data.features.length }));
-    ok(tz.row && tz.reps >= 4 && tz2.z === 'Zone Elm North|agent-1|#00a3a3|4' && tz2.f === 1 && tz2.below && tz2.ev && hid === 0 && kept === 1 && tzAfter.n === 1 && tzAfter.f === 1,
-      'Lasso › Save as Turf Zone: named rep-colour outline under the pins · outbox event · Filters toggle · survives layer switch + reload (IndexedDB)', { tz, tz2, hid, kept, tzAfter });
+    await page.click('#pill-filter'); const tz = await page.evaluate(() => ({ src: !!DF.map.instance.getSource('turfs'), filter: !!DF.$('#turf-filter'), save: !!DF.$('#ls-turf'), ns: typeof DF.turf, kept: (DF.sync.meta('turfs') || []).length,
+      layers: DF.map.instance.getStyle().layers.filter(l => /^turf-(fill|line|label)$/.test(l.id)).length })); await page.click('[data-close=filter-drawer]');
+    ok(!tz.src && !tz.filter && !tz.save && tz.ns === 'undefined' && tz.kept === 1 && !tz.layers, 'v2.6: legacy saved turf zones retired: no outlines, no Filters › Turf list, no Save as Turf (old data left untouched)', tz);
     // ---- v2.3: retina tiles + 32 px pins + lower controls, Notes & History feed, invite links, PWA banner + update toast ----
     const rt3 = await page.evaluate(() => { const keep = DF.map.base; DF.map.base = 'google'; const g = DF.map.buildStyle('hybrid').sources.imagery.tiles[0]; DF.map.base = 'esri'; const e = DF.map.buildStyle('satellite').sources.imagery; DF.map.base = keep;
       const st = DF.map.instance.getStyle().sources.imagery.tiles[0], pr = DF.$('.pills.right').getBoundingClientRect(), hdr = DF.$('#campaign-pill').getBoundingClientRect();

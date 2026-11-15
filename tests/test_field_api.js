@@ -55,6 +55,29 @@ const d1 = post({ session: a2, events: [dup] }), d2 = post({ session: a2, events
 ok(d1.accepted[0] === dup.event_id && d2.accepted[0] === dup.event_id && tab('Events').length === n0 + 1 && tab('Events')[n0][3] === 'agent-2', 'idempotent on event_id; events attributed to the session rep');
 ok(post({ action: 'pin_login', rep_id: 'agent-2', pin_hash: DFhash('agent-2:8642') }).ok, 'pin_set → that rep can now sign in on any new phone with Rep ID + PIN');
 
+// v1.1.0: Agent pull = assigned to them + created by them; reassigned-away ids come back as gone; rolling 30-day session
+const p0 = post({ session: own.session, events: [ev({ type: 'create', lead_id: 'L-AT', campaign: 'AT&T Fiber', patch: { campaign: 'AT&T Fiber', status_code: 'NEW', assigned_rep_email: 'agent-2' } }),
+  ev({ type: 'create', lead_id: 'L-AT2', campaign: 'AT&T Fiber', patch: { campaign: 'AT&T Fiber', status_code: 'NEW', assigned_rep_email: 'agent-1' } })] });
+const g1 = post({ session: a2, events: [ev({ type: 'note', lead_id: 'L-FI', patch: { created_by: 'forged', rep_note: 'x' } })] });
+ok(p0.ok && g1.leads.map(l => l.lead_id).sort().join() === 'L-AT,L-FI' && g1.leads.every(l => l.created_by !== 'forged') && post({ session: own.session, events: [] }).leads.length === 4,
+  'Agent pull: only leads assigned to them + pins they created (created_by never patchable); Owner still gets the full campaign set', g1.leads.map(l => l.lead_id));
+for (const t0 = Date.now(); Date.now() < t0 + 3;);                         // distinct server ms (real Apps Script calls are far apart)
+post({ session: own.session, events: [ev({ type: 'assign', lead_id: 'L-AT', patch: { assigned_rep_email: 'agent-1' } })] });
+const g2 = post({ session: a2, since: g1.server_ts, events: [] });
+ok(!g2.leads.some(l => l.lead_id === 'L-AT') && g2.gone.join() === 'L-AT' && post({ session: own.session, events: [] }).gone === undefined, 'lead reassigned away → id in gone (no data); Owner gets no gone list', g2);
+const srow = tab('Sessions').find(r => r[0] === sha(a2)); srow[2] = Date.now() + 864e5;
+const g3 = post({ session: a2, events: [] }), d30 = Date.now() + 30 * 864e5;
+ok(Math.abs(Number(tab('Sessions').find(r => r[0] === sha(a2))[2]) - d30) < 6e4 && Math.abs(g3.session_exp - d30) < 6e4, 'rolling session: a sync renews the session to 30 days and returns session_exp', g3.session_exp);
+
+// v1.2.0 Blitz Board: per-rep aggregates for today (knocks / contacts / sold / streak), no lead details
+const day0 = new Date(Date.now() - 6 * 36e5).toISOString(), me2 = bd => (bd.find(x => x.rep === 'agent-2') || { knocks: 0, contacts: 0, sold: 0 });
+const k0 = me2(post({ session: a2, day_start: day0, events: [] }).board), ago = m => new Date(Date.now() - m * 6e4).toISOString();
+const st = (to, m, extra) => ev(Object.assign({ type: 'status', lead_id: 'L-FI', campaign: 'Fidium', to, device_ts: ago(m), patch: { status_code: to } }, extra || {}));
+const bb = post({ session: a2, day_start: day0, events: [st('NH1', 130), st('NH2', 15), st('GB', 10), st('SOLD', 5), st('NI', 4, { source: 'bulk' }), st('NEW', 3), st('NH1', 60 * 30)] }).board, k1 = me2(bb);
+ok(k1.knocks === k0.knocks + 4 && k1.contacts === k0.contacts + 2 && k1.sold === k0.sold + 1 && k1.streak >= 3 && k1.best >= k1.streak &&
+  bb.every(x => Object.keys(x).sort().join() === 'best,contacts,knocks,rep,sold,streak') && G.ctx.faStreak_([0, 6e5, 12e5, 6e6, 66e5], 7e6).join() === '2,3',
+  'Blitz Board: today only (yesterday + bulk + NEW ignored), knocks / contacts / sold / knock streak (20-min gaps) per rep, aggregates only', { k0, k1 });
+
 for (let i = 0; i < 5; i++) post({ action: 'pin_login', rep_id: 'agent-1', pin_hash: DFhash('agent-1:000' + i) });
 ok(post({ action: 'pin_login', rep_id: 'agent-1', pin_hash: DFhash('agent-1:1357') }).error === 'locked', '5 wrong PINs → locked for 15 minutes (even the right PIN)');
 delete G.cache['pin:agent-1'];

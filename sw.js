@@ -1,11 +1,11 @@
 // Doorway Field v2.0 — service worker: app shell offline (cache-first), viewed map tiles cached at runtime (capped),
 // API calls never cached. Background Sync (Android/Chrome only) just asks the open page to flush; iPhone flushes on open.
-const SHELL = 'df-shell-2.5.1';
+const SHELL = 'df-shell-2.6.0';
 const TILES = 'df-tiles-1';
 const TILE_CAP = 3000;   // viewed tiles only (re-panning turf = 0 data); no bulk pre-download (OpenFreeMap / Esri terms). Google tiles: browser HTTP cache only (Google terms)
 let puts = 0;
 const ASSETS = ['./', 'index.html', 'styles.css', 'styles-v2.css', 'config.public.js', 'manifest.webmanifest', 'icon.svg',
-  'core/app.js', 'core/OfflineSync.js', 'map/MapEngine.js', 'map/GpsTracker.js', 'map/TurfLasso.js', 'map/MapTools.js', 'ui/BottomCard.js', 'ui/FilterDrawer.js', 'ui/LassoSheet.js', 'ui/ListView.js', 'ui/StatsView.js', 'ui/LeadImport.js', 'ui/AdminPanel.js', 'ui/AdminRoster.js', 'map/PinStudio.js', 'map/TurfZones.js', 'ui/CardPlus.js', 'ui/FollowUps.js', 'core/Pwa.js',
+  'core/app.js', 'core/OfflineSync.js', 'core/Auth.js', 'map/MapEngine.js', 'map/GpsTracker.js', 'map/TurfLasso.js', 'map/MapTools.js', 'ui/BottomCard.js', 'ui/FilterDrawer.js', 'ui/LassoSheet.js', 'ui/ListView.js', 'ui/StatsView.js', 'ui/LeadImport.js', 'ui/AdminPanel.js', 'ui/AdminRoster.js', 'map/PinStudio.js', 'ui/CardPlus.js', 'ui/FollowUps.js', 'ui/Scoreboard.js', 'core/Pwa.js',
   'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js', 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css'];
 const TILE_HOSTS = ['server.arcgisonline.com', 'basemap.nationalmap.gov', 'tiles.openfreemap.org'];
 

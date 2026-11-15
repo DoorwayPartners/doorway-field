@@ -1,5 +1,6 @@
 // Doorway Field v2.4.4 — FollowUps (List › Follow-Ups): the signed-in rep's APPT (by appointment time), P GB and GB doors, grouped by street and
 // house number, each with 1-tap navigation, Call / Text (when a phone is saved) and a jump to the pin. Managers / Owner see the active campaign(s).
+// v2.6 nudges: Due Now (APPT within 1 h / overdue today; go-backs inside 5-7 PM), Prime Window: 5–7 PM, 2nd Attempt (one knock so far); Due Now sorts first.
 (function () {
   'use strict';
   const DF = window.DF;
@@ -10,20 +11,30 @@
   const mine = r => DF.inCampaign(r) && (DF.isManager() || (DF.roster.get(r.assigned_rep_email) || {}).id === DF.auth.id);
   const items = () => DF.sync.all().filter(r => CODES.includes(r.status_code) && mine(r));
 
-  function row(r) {
-    const s = DF.sync.BY_CODE[r.status_code], ph = digits(r.phone);
-    return '<li data-id="' + DF.esc(r.lead_id) + '"><span class="status-chip chip-' + r.status_code + '">' + DF.esc(s.short) + '</span> <b>' + DF.esc(r.address + (r.apt ? ' ' + r.apt : '')) + '</b>' +
-      (r.appt_at ? ' <time>' + DF.fmtTime(r.appt_at) + '</time>' : '') + '<span class="fu-act"><a class="icon-btn fu-nav" target="_blank" rel="noopener" aria-label="Navigate" href="https://maps.google.com/?daddr=' + r.lat + ',' + r.lng + '">➤</a>' +
-      (ph ? '<a class="btn fu-call" href="tel:' + ph + '">Call</a><a class="btn fu-text" href="sms:' + ph + '">Text</a>' : '') + '<button type="button" class="btn fu-jump">Map</button></span></li>';
+  const knocks = id => DF.sync.events(id).filter(e => e.type === 'status' && DF.sync.knock(e.to)).length;
+  function badges(r, now) {
+    now = now || Date.now(); const b = [], h = new Date(now).getHours();
+    if (r.status_code === 'APPT') { const m = (Date.parse(r.appt_at) - now) / 6e4; if (m <= 60 && (m >= -180 || new Date(r.appt_at).toDateString() === new Date(now).toDateString())) b.push(['due', 'Due Now']); }
+    else { b.push(h >= 17 && h < 19 ? ['due', 'Due Now'] : ['prime', 'Prime Window: 5–7 PM']); if (knocks(r.lead_id) === 1) b.push(['second', '2nd Attempt']); }
+    return b;
   }
-  function render() {
-    const all = items(), appts = all.filter(r => r.status_code === 'APPT').sort((a, b) => String(a.appt_at || '9999') < String(b.appt_at || '9999') ? -1 : 1);
+  const due = (r, now) => badges(r, now).some(x => x[0] === 'due') ? 0 : 1;
+  let clock = null;                                                     // tests pin the time of day
+  function row(r) {
+    const s = DF.sync.BY_CODE[r.status_code], ph = digits(r.phone), nb = badges(r, clock).map(x => '<em class="nudge n-' + x[0] + '">' + x[1] + '</em>').join('');
+    return '<li data-id="' + DF.esc(r.lead_id) + '"><span class="status-chip chip-' + r.status_code + '">' + DF.esc(s.short) + '</span> <b>' + DF.esc(r.address + (r.apt ? ' ' + r.apt : '')) + '</b>' +
+      (r.appt_at ? ' <time>' + DF.fmtTime(r.appt_at) + '</time>' : '') + nb + '<span class="fu-act"><a class="icon-btn fu-nav" target="_blank" rel="noopener" aria-label="Navigate" href="https://maps.google.com/?daddr=' + r.lat + ',' + r.lng + '">➤</a>' +
+      (ph ? '<a class="btn fu-call" href="tel:' + ph + '">Call</a><a class="btn fu-text" aria-label="Text Customer" href="' + DF.esc(DF.cardplus.smsHref(r)) + '">Text</a>' : '') + '<button type="button" class="btn fu-jump">Map</button></span></li>';
+  }
+  function render(now) {
+    clock = now || null;
+    const all = items(), appts = all.filter(r => r.status_code === 'APPT').sort((a, b) => due(a, clock) - due(b, clock) || (String(a.appt_at || '9999') < String(b.appt_at || '9999') ? -1 : 1));
     const groups = {};
     all.filter(r => r.status_code !== 'APPT').forEach(r => { const k = DF.cardplus.streetOf(r) || 'Unknown street'; (groups[k] = groups[k] || []).push(r); });
     $('#fu-count').textContent = all.length || '';
     $('#followups').innerHTML = !all.length ? '<p class="empty">No follow-ups: APPT, P GB and GB doors land here.</p>' :
       (appts.length ? '<h3>Appointments (' + appts.length + ')</h3><ul class="fu-list">' + appts.map(row).join('') + '</ul>' : '') +
-      '<h3>Go-Backs by street</h3>' + Object.keys(groups).sort().map(k => '<h4>' + DF.esc(k) + '</h4><ul class="fu-list">' + groups[k].sort((a, b) => num(a) - num(b)).map(row).join('') + '</ul>').join('');
+      '<h3>Go-Backs by street</h3>' + Object.keys(groups).sort().map(k => '<h4>' + DF.esc(k) + '</h4><ul class="fu-list">' + groups[k].sort((a, b) => due(a, clock) - due(b, clock) || num(a) - num(b)).map(row).join('') + '</ul>').join('');
     DF.$$('#followups .fu-jump').forEach(b => b.addEventListener('click', () => { const id = b.closest('li').dataset.id; DF.showTab('map'); DF.map.jumpTo(id); }));
     return all.length;
   }
@@ -34,5 +45,5 @@
     DF.bus.on('tab:changed', t => { if (t === 'list') $('#fu-count').textContent = items().length || ''; });
   }
 
-  DF.followups = { init, render, toggle, items };
+  DF.followups = { init, render, toggle, items, badges };
 })();

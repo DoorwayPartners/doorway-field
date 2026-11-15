@@ -116,8 +116,6 @@ h3 .btn { text-transform: none; letter-spacing: 0; padding: 4px 10px; font-size:
 .center-cross::before { left: 16px; top: 0; width: 2px; height: 34px; } .center-cross::after { top: 16px; left: 0; height: 2px; width: 34px; }
 .center-cross[hidden] { display: none; }
 #search-results li.geo b { color: var(--red); }
-.turf-list { list-style: none; padding: 0; margin: 6px 0; } .turf-list li { display: flex; align-items: center; gap: 6px; padding: 4px 0; } .turf-list .t-del { margin-left: auto; }
-#ls-turf[hidden] { display: none; }
 /* v2.3 controls lower + mode label, install banner, history feed */
 .pills.right { top: calc(108px + var(--safe-t)); align-items: flex-end; }
 .pill.mode-pill { width: auto; min-width: 42px; padding: 0 12px; border-radius: 21px; font-size: 14px; white-space: nowrap; }
@@ -154,3 +152,12 @@ h3 .btn { text-transform: none; letter-spacing: 0; padding: 4px 10px; font-size:
 .team-form { flex-wrap: wrap; } .team-form input, .team-form select { min-width: 110px; } .team-form[hidden] { display: none; }
 .ts-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 4px 0 6px; } .ts-grid div { background: #f4f4f5; border-radius: 10px; padding: 6px; text-align: center; }
 .ts-grid dt { font-size: 11px; color: #52525b; } .ts-grid dd { margin: 2px 0 0; font-size: 20px; font-weight: 800; } .ts-by { font-size: 12px; color: #52525b; margin: 0 0 8px; }
+/* v2.5.2 sign-in reset link + drawer reset */
+.btn.link { display: block; width: 100%; margin-top: 10px; background: none; border: 0; color: #52525b; text-decoration: underline; font-size: 13px; }
+#drawer-reset { margin-top: 18px; }
+/* v2.6 Blitz Board, knock streak, follow-up nudges */
+.pill-outline.blitz { margin-left: 4px; } .pill-outline.blitz.hot { background: #f97316; color: #fff; border-color: #f97316; }
+table.blitz { width: 100%; border-collapse: collapse; font-size: 14px; } table.blitz th, table.blitz td { padding: 6px 4px; text-align: right; border-bottom: 1px solid #eee; }
+table.blitz th:nth-child(2), table.blitz td:nth-child(2) { text-align: left; } table.blitz tr.me td { font-weight: 800; background: #fff7ed; } .blitz .streak { color: #ea580c; font-weight: 700; }
+.nudge { display: inline-block; font-style: normal; font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 8px; margin-left: 4px; background: #e4e4e7; color: #27272a; }
+.nudge.n-due { background: #dc2626; color: #fff; } .nudge.n-prime { background: #fef3c7; color: #92400e; } .nudge.n-second { background: #dbeafe; color: #1e40af; }

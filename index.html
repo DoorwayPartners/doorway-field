@@ -19,6 +19,7 @@
   <script src="config.public.js" defer></script>
   <script src="core/app.js" defer></script>
   <script src="core/OfflineSync.js" defer></script>
+  <script src="core/Auth.js" defer></script>
   <script src="map/MapEngine.js" defer></script>
   <script src="map/GpsTracker.js" defer></script>
   <script src="map/TurfLasso.js" defer></script>
@@ -32,9 +33,9 @@
   <script src="ui/AdminPanel.js" defer></script>
   <script src="ui/AdminRoster.js" defer></script>
   <script src="map/PinStudio.js" defer></script>
-  <script src="map/TurfZones.js" defer></script>
   <script src="ui/CardPlus.js" defer></script>
   <script src="ui/FollowUps.js" defer></script>
+  <script src="ui/Scoreboard.js" defer></script>
   <script src="core/Pwa.js" defer></script>
 </head>
 <body>
@@ -75,9 +76,9 @@
       <div class="grab"></div>
       <div class="card-head">
         <div><h2 id="card-name">Homeowner</h2><span id="card-status" class="status-chip">Prospects (New)</span></div>
-        <div class="card-head-actions"><a class="icon-btn" id="card-nav" target="_blank" rel="noopener" href="#" aria-label="Navigate with Google Maps">➤</a><a class="icon-btn call" id="card-call" hidden aria-label="Call">☎</a><a class="icon-btn call" id="card-text" hidden aria-label="Text">✉</a><button type="button" class="pill-outline" id="card-details">Details</button><button type="button" class="x" id="card-close" aria-label="Close">×</button></div>
+        <div class="card-head-actions"><a class="icon-btn" id="card-nav" target="_blank" rel="noopener" href="#" aria-label="Navigate with Google Maps">➤</a><a class="icon-btn call" id="card-call" hidden aria-label="Call">☎</a><a class="icon-btn call" id="card-text" hidden aria-label="Text Customer" title="Text Customer">✉</a><button type="button" class="pill-outline" id="card-details">Details</button><button type="button" class="x" id="card-close" aria-label="Close">×</button></div>
       </div>
-      <div id="card-score" class="card-score" aria-label="Today's scoreboard: knocks, contacts, sold"><span><b id="sc-knocks">0</b> Knocks</span><span><b id="sc-contacts">0</b> Contacts</span><span><b id="sc-sold">0</b> Sold</span><button type="button" class="pill-outline small" id="sc-team">Me</button></div>
+      <div id="card-score" class="card-score" aria-label="Today's scoreboard: knocks, contacts, sold"><span><b id="sc-knocks">0</b> Knocks</span><span><b id="sc-contacts">0</b> Contacts</span><span><b id="sc-sold">0</b> Sold</span><button type="button" class="pill-outline small" id="sc-team">Me</button><button type="button" class="pill-outline small blitz" id="sc-blitz" aria-label="Blitz Board and knock streak">🔥 0</button></div>
       <p id="card-address" class="address" role="button" tabindex="0" title="Tap to copy"></p>
       <p id="card-meta" class="muted"></p>
       <p id="card-appt" class="appt"></p>
@@ -170,7 +171,7 @@
 <div id="filter-drawer" class="modal drawer" role="dialog" aria-label="Filters"><div class="sheet">
   <div class="sheet-head"><h2>Filters</h2><span><button type="button" class="btn" id="filter-reset">Reset</button> <button type="button" class="x" data-close="filter-drawer" aria-label="Close">×</button></span></div>
   <div id="filter-body" class="filter-body"></div>
-  <div id="turf-filter" class="filter-body turf-filter"></div>
+  <button type="button" class="btn wide btn-reset" id="drawer-reset">Refresh App / Clear Cache</button>
 </div></div>
 
 <div id="lasso-sheet" class="modal drawer sheet-modal" role="dialog" aria-label="Selection"><div class="sheet">
@@ -179,7 +180,6 @@
   <div class="pv-actions manager-only"><select id="ls-rep" aria-label="Assign rep"></select><button type="button" class="btn primary" id="ls-assign">Assign Rep</button></div>
   <h4>Disposition Breakdown <span class="muted">tap to toggle</span></h4><ul id="ls-disp" class="breakdown"></ul>
   <div class="pv-actions"><select id="ls-target" aria-label="Change status to"></select><button type="button" class="btn primary" id="ls-apply">Change Status</button></div>
-  <div id="ls-turf" class="manager-only" hidden><h4>Save as Turf Zone</h4><div class="pv-actions"><input id="ls-turf-name" placeholder="Zone name" maxlength="40" aria-label="Zone name"><select id="ls-turf-rep" aria-label="Zone rep"></select><button type="button" class="btn primary" id="ls-turf-save">Save as Turf Zone</button></div></div>
   <h4>Create Route (up to 23 stops)</h4><button type="button" class="btn" id="ls-route-btn">Create Route</button><div id="ls-route"></div>
   <div class="pv-actions"><button type="button" class="btn" id="ls-export">Export Selected CSV</button><button type="button" class="btn danger manager-only" id="ls-delete">Delete Selected</button></div>
 </div></div>
@@ -204,13 +204,19 @@
   <div class="pv-actions manager-only"><label>Assign to <select id="ts-rep"></select></label><button type="button" class="btn primary" id="ts-assign">Assign Leads</button></div>
   <div class="pv-actions"><button type="button" class="btn" id="ts-clear">Clear</button><button type="button" class="btn" id="ts-more">More…</button></div>
 </div></div>
+<div id="blitz-sheet" class="modal drawer" role="dialog" aria-label="Blitz Board"><div class="sheet compact">
+  <div class="sheet-head"><h2>⚡ Blitz Board</h2><button type="button" class="x" id="blitz-close" aria-label="Close">×</button></div>
+  <table class="blitz"><thead><tr><th>#</th><th>Rep</th><th>Knocks</th><th>Contacts</th><th>Sold</th></tr></thead><tbody id="blitz-body"></tbody></table>
+  <p class="muted small" id="blitz-at"></p><button type="button" class="btn primary wide" id="blitz-copy">Copy Blitz Update</button>
+</div></div>
 <div id="update-banner" class="update-banner" role="button" tabindex="0" hidden><span id="update-text">Update Ready — Tap to Refresh</span></div>
-<div id="modal-signin" class="modal" role="dialog" aria-label="Sign in"><form id="signin-form" class="sheet"><div class="sheet-head"><h2 id="signin-title">Who's knocking?</h2></div>
+<div id="modal-signin" class="modal" role="dialog" aria-label="Sign in"><form id="signin-form" class="sheet" method="post" action="#" autocomplete="on"><div class="sheet-head"><h2 id="signin-title">Who's knocking?</h2></div>
   <p id="signin-banner" class="signin-banner" hidden>Sign in to sync your turf &amp; knocks</p>
-  <label><span>Your name</span><select id="signin-name"></select></label>
-  <label id="signin-id-row" hidden><span>Rep ID</span><input id="signin-id" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="40"></label>
-  <label id="signin-pin-row" hidden><span id="signin-pin-label">PIN</span><input id="signin-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"></label>
-  <p id="signin-err" class="rejects"></p><button class="btn primary wide" type="submit">Continue</button></form></div>
+  <label><span>Your name</span><select id="signin-name" aria-label="Pick your name"></select></label>
+  <label id="signin-id-row"><span>Rep ID</span><input id="signin-id" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="40" required></label>
+  <label id="signin-pin-row" hidden><span id="signin-pin-label">PIN / Password</span><input id="signin-pin" name="password" type="password" inputmode="numeric" maxlength="8" autocomplete="current-password"></label>
+  <p id="signin-err" class="rejects"></p><button class="btn primary wide" type="submit">Sign In</button>
+  <button type="button" class="btn link btn-reset" id="signin-reset">Refresh App / Clear Cache</button></form></div>
 
 <div id="toast" class="toast" role="status"><span id="toast-msg"></span><button type="button" id="toast-action" hidden></button></div>
 </body>
